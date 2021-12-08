@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use std::{
     env,
     path::{Path, PathBuf},
@@ -7,10 +9,9 @@ use std::{
 use anyhow::Result;
 use dialoguer::Confirm;
 use nom::{
-    bytes::complete::{tag, take, take_until},
+    bytes::complete::tag,
     character::complete::{char, digit1},
     combinator::map,
-    error::ErrorKind,
     sequence::{delimited, preceded, separated_pair},
     IResult,
 };
@@ -81,11 +82,16 @@ struct BasicMetadata {
 }
 
 #[derive(Default)]
-struct HdrMetadata {
+struct ColorCoordinates {
     pub red: (f64, f64),
     pub green: (f64, f64),
     pub blue: (f64, f64),
     pub white: (f64, f64),
+}
+
+#[derive(Default)]
+struct HdrMetadata {
+    pub color_coords: ColorCoordinates,
     pub max_luma: u32,
     pub min_luma: f64,
     pub max_content_light: u32,
@@ -94,7 +100,7 @@ struct HdrMetadata {
 
 impl Metadata {
     pub fn parse(input: &Path) -> Result<Self> {
-        let data;
+        let mut data;
         match parse_mkvinfo(input) {
             Ok(info) => {
                 data = info;
@@ -120,7 +126,8 @@ impl Metadata {
     }
 
     pub fn apply(&self, target: &Path, output: &Path) -> Result<()> {
-        let command = Command::new("mkvmerge")
+        let mut command = Command::new("mkvmerge");
+        command
             .arg("-o")
             .arg(output)
             .arg("--colour-range")
@@ -131,7 +138,7 @@ impl Metadata {
             .arg(format!("0:{}", self.basic.primaries))
             .arg("--colour-matrix-coefficients")
             .arg(format!("0:{}", self.basic.matrix));
-        if let Some(hdr_data) = self.hdr {
+        if let Some(ref hdr_data) = self.hdr {
             command
                 .arg("--max-content-light")
                 .arg(format!("0:{}", hdr_data.max_content_light))
@@ -144,15 +151,18 @@ impl Metadata {
                 .arg("--chromaticity-coordinates")
                 .arg(format!(
                     "0:{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
-                    hdr_data.red.0,
-                    hdr_data.red.1,
-                    hdr_data.green.0,
-                    hdr_data.green.1,
-                    hdr_data.blue.0,
-                    hdr_data.blue.1
+                    hdr_data.color_coords.red.0,
+                    hdr_data.color_coords.red.1,
+                    hdr_data.color_coords.green.0,
+                    hdr_data.color_coords.green.1,
+                    hdr_data.color_coords.blue.0,
+                    hdr_data.color_coords.blue.1
                 ))
                 .arg("--white-colour-coordinates")
-                .arg(format!("0:{:.5},{:.5}", hdr_data.white.0, hdr_data.white.1));
+                .arg(format!(
+                    "0:{:.5},{:.5}",
+                    hdr_data.color_coords.white.0, hdr_data.color_coords.white.1
+                ));
         }
         command.arg(target);
         eprintln!("Running: {:?}", command);
@@ -224,35 +234,35 @@ fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
             continue;
         }
         if line.contains("Red colour coordinate x:") {
-            hdr.red.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.red.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Red colour coordinate y:") {
-            hdr.red.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.red.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Green colour coordinate x:") {
-            hdr.green.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.green.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Green colour coordinate y:") {
-            hdr.green.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.green.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Blue colour coordinate x:") {
-            hdr.blue.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.blue.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Blue colour coordinate y:") {
-            hdr.blue.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.blue.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("White colour coordinate x:") {
-            hdr.white.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.white.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("White colour coordinate y:") {
-            hdr.white.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.white.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Maximum luminance:") {
@@ -392,7 +402,7 @@ fn parse_mediainfo(input: &Path) -> Result<Metadata> {
                 .trim_start_matches("min: ")
                 .trim_end_matches(" cd/m2")
                 .parse()?;
-            hdr.max_luma = min
+            hdr.max_luma = max
                 .trim_start_matches("max: ")
                 .trim_end_matches(" cd/m2")
                 .parse()?;
@@ -401,16 +411,7 @@ fn parse_mediainfo(input: &Path) -> Result<Metadata> {
 
         if line.contains("Encoding settings") && line.contains("master-display") {
             let settings = line.split_once(": ").unwrap().1;
-            let settings = parse_x265_settings(&settings)?;
-            // Why 50000? Why indeed. Ask the x265 maintainers.
-            hdr.red.0 = (settings.0).0 as f64 / 50000.;
-            hdr.red.0 = (settings.0).1 as f64 / 50000.;
-            hdr.green.0 = (settings.1).0 as f64 / 50000.;
-            hdr.green.0 = (settings.1).1 as f64 / 50000.;
-            hdr.blue.0 = (settings.2).0 as f64 / 50000.;
-            hdr.blue.0 = (settings.2).1 as f64 / 50000.;
-            hdr.white.0 = (settings.3).0 as f64 / 50000.;
-            hdr.white.0 = (settings.3).1 as f64 / 50000.;
+            hdr.color_coords = parse_x265_settings(settings)?;
         }
     }
 
@@ -426,17 +427,24 @@ fn parse_mediainfo(input: &Path) -> Result<Metadata> {
 // Returns ((Rx, Ry), (Gx, Gy), (Bx, By), (Wx, Wy))
 //
 // Also using unwrap here because who cares?
-fn parse_x265_settings(input: &str) -> Result<((u32, u32), (u32, u32), (u32, u32), (u32, u32))> {
+fn parse_x265_settings(input: &str) -> Result<ColorCoordinates> {
     const MASTER_DISPLAY_HEADER: &str = "master-display=";
     let header_pos = input
         .find(MASTER_DISPLAY_HEADER)
         .ok_or(anyhow::anyhow!("Failed to find master display header"))?;
     let input = &input[(header_pos + MASTER_DISPLAY_HEADER.len())..];
-    let (input, (gx, gy)) = preceded(char('G'), get_coordinate_pair)(input)?;
-    let (input, (bx, by)) = preceded(char('B'), get_coordinate_pair)(input)?;
-    let (input, (rx, ry)) = preceded(char('R'), get_coordinate_pair)(input)?;
-    let (_, (wx, wy)) = preceded(tag("WP"), get_coordinate_pair)(input)?;
-    Ok(((rx, ry), (gx, gy), (bx, by), (wx, wy)))
+    let (input, (gx, gy)) = preceded(char('G'), get_coordinate_pair)(input).unwrap();
+    let (input, (bx, by)) = preceded(char('B'), get_coordinate_pair)(input).unwrap();
+    let (input, (rx, ry)) = preceded(char('R'), get_coordinate_pair)(input).unwrap();
+    let (_, (wx, wy)) = preceded(tag("WP"), get_coordinate_pair)(input).unwrap();
+
+    // Why 50000? Why indeed. Ask the x265 maintainers.
+    Ok(ColorCoordinates {
+        red: (rx as f64 / 50000., ry as f64 / 50000.),
+        green: (gx as f64 / 50000., gy as f64 / 50000.),
+        blue: (bx as f64 / 50000., by as f64 / 50000.),
+        white: (wx as f64 / 50000., wy as f64 / 50000.),
+    })
 }
 
 fn get_coordinate_pair(input: &str) -> IResult<&str, (u32, u32)> {
