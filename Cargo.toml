@@ -2,6 +2,12 @@
 name = "hdrcopier"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.56"
+authors = ["Joshua Holmer <jholmer.in@gmail.com>"]
+description = "A tool for copying colorspace and HDR metadata from one file to another"
+repository = "https://github.com/shssoichiro/hdrcopier"
+license = "MIT"
+keywords = ["video", "multimedia"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,3 +15,7 @@ edition = "2021"
 anyhow = "1.0.51"
 dialoguer = "0.9.0"
 nom = "7.1.0"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
