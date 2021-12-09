@@ -99,15 +99,22 @@ struct HdrMetadata {
 }
 
 impl Metadata {
+    // Why do we have to go through all three of these?
+    //
+    // WELL, I'm glad you asked.
+    // Sometimes, exactly one of these three tools will be able
+    // to extract the HDR metadata. So we have to test all three.
+    // Just to be sure we didn't miss it.
+    //
+    // Encoding is dumb.
     pub fn parse(input: &Path) -> Result<Self> {
-        let mut data;
+        let mut data = Metadata::default();
         match parse_mkvinfo(input) {
             Ok(info) => {
                 data = info;
             }
             Err(e) => {
                 eprintln!("Warning: {}", e);
-                data = Metadata::default();
             }
         }
         if data.hdr.is_some() {
@@ -120,6 +127,18 @@ impl Metadata {
             Err(e) => {
                 eprintln!("Error: {}", e);
                 anyhow::bail!("Unable to parse metadata");
+            }
+        }
+        if data.hdr.is_some() {
+            return Ok(data);
+        }
+        match parse_ffprobe(input) {
+            Ok(Some(info)) => {
+                data.hdr = Some(info);
+            }
+            Ok(None) => (),
+            Err(e) => {
+                eprintln!("Warning: {}", e);
             }
         }
         Ok(data)
@@ -459,4 +478,112 @@ fn get_coordinate_pair(input: &str) -> IResult<&str, (u32, u32)> {
             (x.parse::<u32>().unwrap(), y.parse::<u32>().unwrap())
         },
     )(input)
+}
+
+// And then there are some videos where the data only shows in ffprobe.
+//
+// Like so:
+//
+// [SIDE_DATA]
+// side_data_type=Mastering display metadata
+// red_x=34000/50000
+// red_y=15999/50000
+// green_x=13250/50000
+// green_y=34499/50000
+// blue_x=7499/50000
+// blue_y=2999/50000
+// white_point_x=15634/50000
+// white_point_y=16450/50000
+// min_luminance=50/10000
+// max_luminance=10000000/10000
+// [/SIDE_DATA]
+// [SIDE_DATA]
+// side_data_type=Content light level metadata
+// max_content=944
+// max_average=143
+// [/SIDE_DATA]
+//
+// This only looks at HDR data, because at least one of mediainfo
+// or mkvinfo should have found the color primary data.
+// Or your source is badly broken.
+fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
+    let result = Command::new("ffprobe")
+        .arg("-v")
+        .arg("quiet")
+        .arg("-show_frames")
+        .arg("-read_intervals")
+        .arg("%+#1")
+        .arg(input)
+        .output()?;
+    let output = String::from_utf8_lossy(&result.stdout);
+
+    if !(output.contains("side_data_type=Mastering display metadata")
+        && output.contains("side_data_type=Content light level metadata"))
+    {
+        return Ok(None);
+    }
+
+    let mut hdr = HdrMetadata::default();
+    for line in output.lines() {
+        if line.starts_with("red_x=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.red.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("red_y=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.red.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("green_x=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.green.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("green_y=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.green.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("blue_x=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.blue.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("blue_y=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.blue.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("white_point_x=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.white.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("white_point_y=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.color_coords.white.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("min_luminance=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.min_luma = num.parse::<f64>()? / denom.parse::<f64>()?;
+            continue;
+        }
+        if line.starts_with("max_luminance=") {
+            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
+            hdr.max_luma = num.parse::<u32>()? / denom.parse::<u32>()?;
+            continue;
+        }
+
+        if line.starts_with("max_content=") {
+            hdr.max_content_light = line.split_once('=').unwrap().1.parse()?;
+            continue;
+        }
+        if line.starts_with("max_average=") {
+            hdr.max_frame_light = line.split_once('=').unwrap().1.parse()?;
+            continue;
+        }
+    }
+    Ok(Some(hdr))
 }

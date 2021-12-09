@@ -4,6 +4,7 @@
 
 - mkvtoolnix CLI
 - mediainfo CLI
+- ffprobe
 
 ## Usage
 
