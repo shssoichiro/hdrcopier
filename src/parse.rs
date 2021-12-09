@@ -281,6 +281,8 @@ pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
     let result = Command::new("ffprobe")
         .arg("-v")
         .arg("quiet")
+        .arg("-select_streams")
+        .arg("v:0")
         .arg("-show_frames")
         .arg("-read_intervals")
         .arg("%+#1")
