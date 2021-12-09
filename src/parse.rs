@@ -78,38 +78,47 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
             hdr.max_frame_light = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
+
         if line.contains("Red colour coordinate x:") {
-            hdr.color_coords.red.0 = line.split_once(": ").unwrap().1.parse()?;
+            // This should always be the first piece of color data, so we initialize here
+            hdr.color_coords = Some(ColorCoordinates::default());
+
+            hdr.color_coords.as_mut().unwrap().red.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Red colour coordinate y:") {
-            hdr.color_coords.red.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().red.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Green colour coordinate x:") {
-            hdr.color_coords.green.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().green.0 =
+                line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Green colour coordinate y:") {
-            hdr.color_coords.green.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().green.1 =
+                line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Blue colour coordinate x:") {
-            hdr.color_coords.blue.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().blue.0 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("Blue colour coordinate y:") {
-            hdr.color_coords.blue.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().blue.1 = line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("White colour coordinate x:") {
-            hdr.color_coords.white.0 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().white.0 =
+                line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
         if line.contains("White colour coordinate y:") {
-            hdr.color_coords.white.1 = line.split_once(": ").unwrap().1.parse()?;
+            hdr.color_coords.as_mut().unwrap().white.1 =
+                line.split_once(": ").unwrap().1.parse()?;
             continue;
         }
+
         if line.contains("Maximum luminance:") {
             hdr.max_luma = line.split_once(": ").unwrap().1.parse()?;
             continue;
@@ -206,7 +215,7 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
 
         if line.contains("Encoding settings") && line.contains("master-display") {
             let settings = line.split_once(": ").unwrap().1;
-            hdr.color_coords = parse_x265_settings(settings)?;
+            hdr.color_coords = Some(parse_x265_settings(settings)?);
         }
     }
 
@@ -299,43 +308,54 @@ pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
     let mut hdr = HdrMetadata::default();
     for line in output.lines() {
         if line.starts_with("red_x=") {
+            // This should always be the first piece of color data, so we initialize here
+            hdr.color_coords = Some(ColorCoordinates::default());
+
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.red.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().red.0 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("red_y=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.red.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().red.1 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("green_x=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.green.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().green.0 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("green_y=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.green.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().green.1 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("blue_x=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.blue.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().blue.0 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("blue_y=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.blue.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().blue.1 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("white_point_x=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.white.0 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().white.0 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("white_point_y=") {
             let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.white.1 = num.parse::<f64>()? / denom.parse::<f64>()?;
+            hdr.color_coords.as_mut().unwrap().white.1 =
+                num.parse::<f64>()? / denom.parse::<f64>()?;
             continue;
         }
         if line.starts_with("min_luminance=") {

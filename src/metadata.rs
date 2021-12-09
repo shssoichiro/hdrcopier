@@ -44,7 +44,7 @@ pub struct ColorCoordinates {
 
 #[derive(Default)]
 pub struct HdrMetadata {
-    pub color_coords: ColorCoordinates,
+    pub color_coords: Option<ColorCoordinates>,
     pub max_luma: u32,
     pub min_luma: f64,
     pub max_content_light: u32,
@@ -82,7 +82,7 @@ impl Metadata {
                 anyhow::bail!("Unable to parse metadata");
             }
         }
-        if data.hdr.is_some() {
+        if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
             return Ok(data);
         }
         match parse_ffprobe(input) {
@@ -139,22 +139,24 @@ impl Metadata {
             );
             println!("Maximum Luminance: {}", hdr_data.max_luma);
             println!("Minimum Luminance: {}", hdr_data.min_luma);
-            println!(
-                "Red Coordinates: {:.5}, {:.5}",
-                hdr_data.color_coords.red.0, hdr_data.color_coords.red.1
-            );
-            println!(
-                "Green Coordinates: {:.5}, {:.5}",
-                hdr_data.color_coords.green.0, hdr_data.color_coords.green.1
-            );
-            println!(
-                "Blue Coordinates: {:.5}, {:.5}",
-                hdr_data.color_coords.blue.0, hdr_data.color_coords.blue.1
-            );
-            println!(
-                "White Point Coordinates: {:.5}, {:.5}",
-                hdr_data.color_coords.white.0, hdr_data.color_coords.white.1
-            );
+            if let Some(ref color_coords) = hdr_data.color_coords {
+                println!(
+                    "Red Coordinates: {:.5}, {:.5}",
+                    color_coords.red.0, color_coords.red.1
+                );
+                println!(
+                    "Green Coordinates: {:.5}, {:.5}",
+                    color_coords.green.0, color_coords.green.1
+                );
+                println!(
+                    "Blue Coordinates: {:.5}, {:.5}",
+                    color_coords.blue.0, color_coords.blue.1
+                );
+                println!(
+                    "White Point Coordinates: {:.5}, {:.5}",
+                    color_coords.white.0, color_coords.white.1
+                );
+            }
         }
     }
 
@@ -173,7 +175,7 @@ impl Metadata {
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
                     format_master_display(
-                        &hdr_data.color_coords,
+                        hdr_data.color_coords.as_ref().unwrap(),
                         hdr_data.max_luma,
                         hdr_data.min_luma
                     )
@@ -193,11 +195,11 @@ impl Metadata {
             print_rav1e_matrix_coefficients(self.basic.matrix),
             if let Some(ref hdr_data) = self.hdr {
                 format!(
-                    " --content-light {},{} --mastering-display {}",
+                    " --content-light {},{}{}",
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
                     format_master_display(
-                        &hdr_data.color_coords,
+                        hdr_data.color_coords.as_ref().unwrap(),
                         hdr_data.max_luma,
                         hdr_data.min_luma
                     )
@@ -247,22 +249,25 @@ impl Metadata {
                 .arg("--max-luminance")
                 .arg(format!("0:{}", hdr_data.max_luma))
                 .arg("--min-luminance")
-                .arg(format!("0:{:.4}", hdr_data.min_luma))
-                .arg("--chromaticity-coordinates")
-                .arg(format!(
-                    "0:{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
-                    hdr_data.color_coords.red.0,
-                    hdr_data.color_coords.red.1,
-                    hdr_data.color_coords.green.0,
-                    hdr_data.color_coords.green.1,
-                    hdr_data.color_coords.blue.0,
-                    hdr_data.color_coords.blue.1
-                ))
-                .arg("--white-colour-coordinates")
-                .arg(format!(
-                    "0:{:.5},{:.5}",
-                    hdr_data.color_coords.white.0, hdr_data.color_coords.white.1
-                ));
+                .arg(format!("0:{:.4}", hdr_data.min_luma));
+            if let Some(ref color_coords) = hdr_data.color_coords {
+                command
+                    .arg("--chromaticity-coordinates")
+                    .arg(format!(
+                        "0:{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
+                        color_coords.red.0,
+                        color_coords.red.1,
+                        color_coords.green.0,
+                        color_coords.green.1,
+                        color_coords.blue.0,
+                        color_coords.blue.1
+                    ))
+                    .arg("--white-colour-coordinates")
+                    .arg(format!(
+                        "0:{:.5},{:.5}",
+                        color_coords.white.0, color_coords.white.1
+                    ));
+            }
         }
         command.arg(target);
         command
