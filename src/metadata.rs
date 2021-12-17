@@ -70,18 +70,6 @@ impl Metadata {
                 eprintln!("Warning: {}", e);
             }
         }
-        if data.hdr.is_some() {
-            return Ok(data);
-        }
-        match parse_mediainfo(input) {
-            Ok(info) => {
-                data = info;
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                anyhow::bail!("Unable to parse metadata");
-            }
-        }
         if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
             return Ok(data);
         }
@@ -92,6 +80,20 @@ impl Metadata {
             Ok(None) => (),
             Err(e) => {
                 eprintln!("Warning: {}", e);
+            }
+        }
+        if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
+            return Ok(data);
+        }
+        match parse_mediainfo(input) {
+            Ok(info) => {
+                if info.hdr.is_some() {
+                    data = info;
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                anyhow::bail!("Unable to parse metadata");
             }
         }
         Ok(data)
