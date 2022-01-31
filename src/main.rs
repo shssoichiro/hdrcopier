@@ -6,7 +6,7 @@ mod values;
 
 use std::{env, path::PathBuf, process::exit};
 
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgMatches};
 use dialoguer::Confirm;
 
 use crate::metadata::{extract_chapters, Metadata};
@@ -15,47 +15,47 @@ fn main() {
     let args = App::new("hdrcopier")
         .version(env!("CARGO_PKG_VERSION"))
         .subcommand(
-            SubCommand::with_name("copy")
+            App::new("copy")
                 .about("Merges the metadata from one file with the media streams from another")
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("file to copy metadata from")
                         .required(true)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("target")
+                    Arg::new("target")
                         .help("file to copy metadata to; this file is not modified directly")
                         .required(true)
                         .index(2),
                 )
                 .arg(
-                    Arg::with_name("output")
+                    Arg::new("output")
                         .help("filename of the resulting combined file")
                         .required(true)
                         .index(3),
                 )
                 .arg(
-                    Arg::with_name("chapters")
+                    Arg::new("chapters")
                         .help("Also copy chapters from input to output")
                         .long("chapters")
                         .takes_value(false),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("show")
+            App::new("show")
                 .about("Displays the metadata to the user")
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("file to parse metadata from")
                         .required(true)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("format")
+                    Arg::new("format")
                         .help("display output in a CLI-compatible format")
                         .long("format")
-                        .short("f")
+                        .short('f')
                         .takes_value(true)
                         .possible_values(&["x265", "rav1e", "mkvmerge"]),
                 ),
