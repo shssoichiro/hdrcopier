@@ -9,7 +9,7 @@ use std::{env, path::PathBuf, process::exit};
 use clap::{App, Arg, ArgMatches, SubCommand};
 use dialoguer::Confirm;
 
-use crate::metadata::Metadata;
+use crate::metadata::{extract_chapters, Metadata};
 
 fn main() {
     let args = App::new("hdrcopier")
@@ -34,6 +34,12 @@ fn main() {
                         .help("filename of the resulting combined file")
                         .required(true)
                         .index(3),
+                )
+                .arg(
+                    Arg::with_name("chapters")
+                        .help("Also copy chapters from input to output")
+                        .long("chapters")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
@@ -70,6 +76,7 @@ fn copy(args: &ArgMatches) {
     let input = PathBuf::from(&args.value_of("input").expect("Value required by clap"));
     let target = PathBuf::from(&args.value_of("target").expect("Value required by clap"));
     let output = PathBuf::from(&args.value_of("output").expect("Value required by clap"));
+    let chapters = args.is_present("chapters");
 
     if !input.is_file() {
         eprintln!("Input file {:?} does not exist", input);
@@ -99,7 +106,12 @@ fn copy(args: &ArgMatches) {
             exit(1);
         }
     };
-    if let Err(e) = metadata.apply(&target, &output) {
+    let chapters = if chapters {
+        extract_chapters(&input)
+    } else {
+        None
+    };
+    if let Err(e) = metadata.apply(&target, &output, chapters.as_deref()) {
         eprintln!("{}", e);
         exit(1);
     };

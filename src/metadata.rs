@@ -1,4 +1,7 @@
-use std::{path::Path, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::Result;
 
@@ -99,8 +102,8 @@ impl Metadata {
         Ok(data)
     }
 
-    pub fn apply(&self, target: &Path, output: &Path) -> Result<()> {
-        let mut command = self.build_mkvmerge_command(target, output);
+    pub fn apply(&self, target: &Path, output: &Path, chapters: Option<&Path>) -> Result<()> {
+        let mut command = self.build_mkvmerge_command(target, output, chapters);
         eprintln!("Running: {:?}", command);
         let status = command.status()?;
         if !status.success() {
@@ -218,7 +221,7 @@ impl Metadata {
     fn print_mkvmerge_args(&self) {
         let output = format!(
             "{:?}",
-            self.build_mkvmerge_command(Path::new("NUL"), Path::new("NUL"))
+            self.build_mkvmerge_command(Path::new("NUL"), Path::new("NUL"), None)
         );
         println!(
             "{}",
@@ -229,7 +232,12 @@ impl Metadata {
         );
     }
 
-    fn build_mkvmerge_command(&self, target: &Path, output: &Path) -> Command {
+    fn build_mkvmerge_command(
+        &self,
+        target: &Path,
+        output: &Path,
+        chapters: Option<&Path>,
+    ) -> Command {
         let mut command = Command::new("mkvmerge");
         command
             .arg("-o")
@@ -271,6 +279,13 @@ impl Metadata {
                     ));
             }
         }
+        if let Some(chapters) = chapters {
+            command
+                .arg("--chapter-language")
+                .arg("eng")
+                .arg("--chapters")
+                .arg(chapters);
+        }
         command.arg(target);
         command
     }
@@ -290,4 +305,18 @@ fn format_master_display(coords: &ColorCoordinates, max_luma: u32, min_luma: f64
         max_luma * 50000,
         (min_luma * 50000.).round() as u32,
     )
+}
+
+pub fn extract_chapters(input: &Path) -> Option<PathBuf> {
+    let output = input.with_extension("hdrcp_chapters.xml");
+    let result = Command::new("mkvextract")
+        .arg(input)
+        .arg("chapters")
+        .arg(&output)
+        .status();
+    if result.is_ok() {
+        Some(output)
+    } else {
+        None
+    }
 }
