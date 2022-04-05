@@ -14,6 +14,15 @@ pub fn print_color_range(value: u8) -> &'static str {
     }
 }
 
+pub fn color_range_to_mkvedit_prop(value: u8) -> u8 {
+    // mkvpropedit uses "2" for "Full" instead of "0" which is what everyone else uses.
+    // "0" to them means "unset"
+    if value == 0 {
+        return 2;
+    }
+    value
+}
+
 pub fn print_x265_color_range(value: u8) -> &'static str {
     match value {
         0 => "full",

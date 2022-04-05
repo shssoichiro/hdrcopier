@@ -8,17 +8,17 @@ use anyhow::Result;
 use crate::{
     parse::{parse_ffprobe, parse_mediainfo, parse_mkvinfo},
     values::{
-        print_color_primaries, print_color_range, print_matrix_coefficients,
-        print_rav1e_color_primaries, print_rav1e_color_range, print_rav1e_matrix_coefficients,
-        print_rav1e_transfer_characteristics, print_transfer_characteristics,
-        print_x265_color_primaries, print_x265_color_range, print_x265_matrix_coefficients,
-        print_x265_transfer_characteristics,
+        color_range_to_mkvedit_prop, print_color_primaries, print_color_range,
+        print_matrix_coefficients, print_rav1e_color_primaries, print_rav1e_color_range,
+        print_rav1e_matrix_coefficients, print_rav1e_transfer_characteristics,
+        print_transfer_characteristics, print_x265_color_primaries, print_x265_color_range,
+        print_x265_matrix_coefficients, print_x265_transfer_characteristics,
     },
 };
 
 #[derive(Default)]
 pub struct Metadata {
-    pub basic: BasicMetadata,
+    pub basic: Option<BasicMetadata>,
     pub hdr: Option<HdrMetadata>,
 }
 
@@ -66,9 +66,31 @@ impl Metadata {
                 eprintln!("Warning: {}", e);
             }
         }
+        if data.basic.is_some()
+            && data.hdr.is_some()
+            && data.hdr.as_ref().unwrap().color_coords.is_some()
+        {
+            return Ok(data);
+        }
+
+        match parse_mediainfo(input) {
+            Ok(info) => {
+                if data.basic.is_none() && info.basic.is_some() {
+                    data.basic = info.basic;
+                }
+                if info.hdr.is_some() {
+                    data.hdr = info.hdr;
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                anyhow::bail!("Unable to parse metadata");
+            }
+        }
         if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
             return Ok(data);
         }
+
         match parse_ffprobe(input) {
             Ok(Some(info)) => {
                 data.hdr = Some(info);
@@ -78,20 +100,7 @@ impl Metadata {
                 eprintln!("Warning: {}", e);
             }
         }
-        if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
-            return Ok(data);
-        }
-        match parse_mediainfo(input) {
-            Ok(info) => {
-                if info.hdr.is_some() {
-                    data = info;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                anyhow::bail!("Unable to parse metadata");
-            }
-        }
+
         Ok(data)
     }
 
@@ -116,19 +125,21 @@ impl Metadata {
     }
 
     fn print_human_readable_format(&self) {
-        println!("Color Range: {}", print_color_range(self.basic.range));
-        println!(
-            "Color Primaries: {}",
-            print_color_primaries(self.basic.primaries)
-        );
-        println!(
-            "Transfer Characteristics: {}",
-            print_transfer_characteristics(self.basic.transfer)
-        );
-        println!(
-            "Matrix Coefficients: {}",
-            print_matrix_coefficients(self.basic.matrix)
-        );
+        if let Some(ref basic) = self.basic {
+            println!("Color Range: {}", print_color_range(basic.range));
+            println!(
+                "Color Primaries: {}",
+                print_color_primaries(basic.primaries)
+            );
+            println!(
+                "Transfer Characteristics: {}",
+                print_transfer_characteristics(basic.transfer)
+            );
+            println!(
+                "Matrix Coefficients: {}",
+                print_matrix_coefficients(basic.matrix)
+            );
+        }
         if let Some(ref hdr_data) = self.hdr {
             println!("Max Content Light Level: {}", hdr_data.max_content_light);
             println!(
@@ -160,11 +171,18 @@ impl Metadata {
 
     fn print_x265_args(&self) {
         println!(
-            "--range {} --colorprim {} --transfer {} --colormatrix {}{}",
-            print_x265_color_range(self.basic.range),
-            print_x265_color_primaries(self.basic.primaries),
-            print_x265_transfer_characteristics(self.basic.transfer),
-            print_x265_matrix_coefficients(self.basic.matrix),
+            "{}{}",
+            if let Some(ref basic) = self.basic {
+                format!(
+                    "--range {} --colorprim {} --transfer {} --colormatrix {}",
+                    print_x265_color_range(basic.range),
+                    print_x265_color_primaries(basic.primaries),
+                    print_x265_transfer_characteristics(basic.transfer),
+                    print_x265_matrix_coefficients(basic.matrix)
+                )
+            } else {
+                String::new()
+            },
             if let Some(ref hdr_data) = self.hdr {
                 format!(
                     " --max-luma {} --min-luma {:.4} --max-cll {},{} --master-display {}",
@@ -186,11 +204,18 @@ impl Metadata {
 
     fn print_rav1e_args(&self) {
         println!(
-            "--range {} --primaries {} --transfer {} --matrix {}{}",
-            print_rav1e_color_range(self.basic.range),
-            print_rav1e_color_primaries(self.basic.primaries),
-            print_rav1e_transfer_characteristics(self.basic.transfer),
-            print_rav1e_matrix_coefficients(self.basic.matrix),
+            "{}{}",
+            if let Some(ref basic) = self.basic {
+                format!(
+                    "--range {} --primaries {} --transfer {} --matrix {}",
+                    print_rav1e_color_range(basic.range),
+                    print_rav1e_color_primaries(basic.primaries),
+                    print_rav1e_transfer_characteristics(basic.transfer),
+                    print_rav1e_matrix_coefficients(basic.matrix)
+                )
+            } else {
+                String::new()
+            },
             if let Some(ref hdr_data) = self.hdr {
                 format!(
                     " --content-light {},{}{}",
@@ -224,20 +249,24 @@ impl Metadata {
 
     fn build_mkvmerge_command(&self, target: &Path, chapters: Option<&Path>) -> Command {
         let mut command = Command::new("mkvpropedit");
-        command
-            .arg("-e")
-            .arg("track:v1")
-            .arg("-s")
-            .arg(format!("colour-range={}", self.basic.range))
-            .arg("-s")
-            .arg(format!(
-                "colour-transfer-characteristics={}",
-                self.basic.transfer
-            ))
-            .arg("-s")
-            .arg(format!("colour-primaries={}", self.basic.primaries))
-            .arg("-s")
-            .arg(format!("colour-matrix-coefficients={}", self.basic.matrix));
+        command.arg("-e").arg("track:v1");
+        if let Some(ref basic) = self.basic {
+            command
+                .arg("-s")
+                .arg(format!(
+                    "colour-range={}",
+                    color_range_to_mkvedit_prop(basic.range)
+                ))
+                .arg("-s")
+                .arg(format!(
+                    "colour-transfer-characteristics={}",
+                    basic.transfer
+                ))
+                .arg("-s")
+                .arg(format!("colour-primaries={}", basic.primaries))
+                .arg("-s")
+                .arg(format!("colour-matrix-coefficients={}", basic.matrix));
+        }
         if let Some(ref hdr_data) = self.hdr {
             command
                 .arg("-s")

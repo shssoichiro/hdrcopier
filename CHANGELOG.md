@@ -1,3 +1,7 @@
+## Version 0.3.1
+
+- Fix more bugs with color matrix setting
+
 ## Version 0.3.0
 
 - [Breaking] Rework how the remuxing works to use mkvtoolnix's header editor
