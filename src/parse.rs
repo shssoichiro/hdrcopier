@@ -12,9 +12,7 @@ use nom::{
 use crate::{
     metadata::{BasicMetadata, ColorCoordinates, HdrMetadata, Metadata},
     values::{
-        parse_color_primaries,
-        parse_color_range,
-        parse_matrix_coefficients,
+        parse_color_primaries, parse_color_range, parse_matrix_coefficients,
         parse_transfer_characteristics,
     },
 };
@@ -233,7 +231,7 @@ fn parse_x265_settings(input: &str) -> Result<ColorCoordinates> {
     const MASTER_DISPLAY_HEADER: &str = "master-display=";
     let header_pos = input
         .find(MASTER_DISPLAY_HEADER)
-        .ok_or(anyhow::anyhow!("Failed to find master display header"))?;
+        .ok_or_else(|| anyhow::anyhow!("Failed to find master display header"))?;
     let input = &input[(header_pos + MASTER_DISPLAY_HEADER.len())..];
     let (input, (gx, gy)) = preceded(char('G'), get_coordinate_pair)(input).unwrap();
     let (input, (bx, by)) = preceded(char('B'), get_coordinate_pair)(input).unwrap();

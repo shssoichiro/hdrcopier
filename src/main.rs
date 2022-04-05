@@ -6,15 +6,15 @@ mod values;
 
 use std::{env, path::PathBuf, process::exit};
 
-use clap::{App, Arg, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
 
 use crate::metadata::{extract_chapters, Metadata};
 
 fn main() {
-    let args = App::new("hdrcopier")
+    let args = Command::new("hdrcopier")
         .version(env!("CARGO_PKG_VERSION"))
         .subcommand(
-            App::new("copy")
+            Command::new("copy")
                 .about("Merges the metadata from one file with the media streams from another")
                 .arg(
                     Arg::new("input")
@@ -36,7 +36,7 @@ fn main() {
                 ),
         )
         .subcommand(
-            App::new("show")
+            Command::new("show")
                 .about("Displays the metadata to the user")
                 .arg(
                     Arg::new("input")
