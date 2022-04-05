@@ -8,17 +8,10 @@ use anyhow::Result;
 use crate::{
     parse::{parse_ffprobe, parse_mediainfo, parse_mkvinfo},
     values::{
-        print_color_primaries,
-        print_color_range,
-        print_matrix_coefficients,
-        print_rav1e_color_primaries,
-        print_rav1e_color_range,
-        print_rav1e_matrix_coefficients,
-        print_rav1e_transfer_characteristics,
-        print_transfer_characteristics,
-        print_x265_color_primaries,
-        print_x265_color_range,
-        print_x265_matrix_coefficients,
+        print_color_primaries, print_color_range, print_matrix_coefficients,
+        print_rav1e_color_primaries, print_rav1e_color_range, print_rav1e_matrix_coefficients,
+        print_rav1e_transfer_characteristics, print_transfer_characteristics,
+        print_x265_color_primaries, print_x265_color_range, print_x265_matrix_coefficients,
         print_x265_transfer_characteristics,
     },
 };
@@ -102,8 +95,8 @@ impl Metadata {
         Ok(data)
     }
 
-    pub fn apply(&self, target: &Path, output: &Path, chapters: Option<&Path>) -> Result<()> {
-        let mut command = self.build_mkvmerge_command(target, output, chapters);
+    pub fn apply(&self, target: &Path, chapters: Option<&Path>) -> Result<()> {
+        let mut command = self.build_mkvmerge_command(target, chapters);
         eprintln!("Running: {:?}", command);
         let status = command.status()?;
         if !status.success() {
@@ -219,10 +212,7 @@ impl Metadata {
     // The reason is to reduce code duplication, since we also use mkvmerge
     // for muxing.
     fn print_mkvmerge_args(&self) {
-        let output = format!(
-            "{:?}",
-            self.build_mkvmerge_command(Path::new("NUL"), Path::new("NUL"), None)
-        );
+        let output = format!("{:?}", self.build_mkvmerge_command(Path::new("NUL"), None));
         println!(
             "{}",
             output
@@ -232,59 +222,72 @@ impl Metadata {
         );
     }
 
-    fn build_mkvmerge_command(
-        &self,
-        target: &Path,
-        output: &Path,
-        chapters: Option<&Path>,
-    ) -> Command {
-        let mut command = Command::new("mkvmerge");
+    fn build_mkvmerge_command(&self, target: &Path, chapters: Option<&Path>) -> Command {
+        let mut command = Command::new("mkvpropedit");
         command
-            .arg("-o")
-            .arg(output)
-            .arg("--colour-range")
-            .arg(format!("0:{}", self.basic.range))
-            .arg("--colour-transfer-characteristics")
-            .arg(format!("0:{}", self.basic.transfer))
-            .arg("--colour-primaries")
-            .arg(format!("0:{}", self.basic.primaries))
-            .arg("--colour-matrix-coefficients")
-            .arg(format!("0:{}", self.basic.matrix));
+            .arg("-e")
+            .arg("track:v1")
+            .arg("-s")
+            .arg(format!("colour-range={}", self.basic.range))
+            .arg("-s")
+            .arg(format!(
+                "colour-transfer-characteristics={}",
+                self.basic.transfer
+            ))
+            .arg("-s")
+            .arg(format!("colour-primaries={}", self.basic.primaries))
+            .arg("-s")
+            .arg(format!("colour-matrix-coefficients={}", self.basic.matrix));
         if let Some(ref hdr_data) = self.hdr {
             command
-                .arg("--max-content-light")
-                .arg(format!("0:{}", hdr_data.max_content_light))
-                .arg("--max-frame-light")
-                .arg(format!("0:{}", hdr_data.max_frame_light))
-                .arg("--max-luminance")
-                .arg(format!("0:{}", hdr_data.max_luma))
-                .arg("--min-luminance")
-                .arg(format!("0:{:.4}", hdr_data.min_luma));
+                .arg("-s")
+                .arg(format!("max-content-light={}", hdr_data.max_content_light))
+                .arg("-s")
+                .arg(format!("max-frame-light={}", hdr_data.max_frame_light))
+                .arg("-s")
+                .arg(format!("max-luminance={}", hdr_data.max_luma))
+                .arg("-s")
+                .arg(format!("min-luminance={:.4}", hdr_data.min_luma));
             if let Some(ref color_coords) = hdr_data.color_coords {
                 command
-                    .arg("--chromaticity-coordinates")
+                    .arg("-s")
                     .arg(format!(
-                        "0:{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
-                        color_coords.red.0,
-                        color_coords.red.1,
-                        color_coords.green.0,
-                        color_coords.green.1,
-                        color_coords.blue.0,
+                        "chromaticity-coordinates-red-x={:.5}",
+                        color_coords.red.0
+                    ))
+                    .arg("-s")
+                    .arg(format!(
+                        "chromaticity-coordinates-red-y={:.5}",
+                        color_coords.red.1
+                    ))
+                    .arg("-s")
+                    .arg(format!(
+                        "chromaticity-coordinates-green-x={:.5}",
+                        color_coords.green.0
+                    ))
+                    .arg("-s")
+                    .arg(format!(
+                        "chromaticity-coordinates-green-y={:.5}",
+                        color_coords.green.1
+                    ))
+                    .arg("-s")
+                    .arg(format!(
+                        "chromaticity-coordinates-blue-x={:.5}",
+                        color_coords.blue.0
+                    ))
+                    .arg("-s")
+                    .arg(format!(
+                        "chromaticity-coordinates-blue-y={:.5}",
                         color_coords.blue.1
                     ))
-                    .arg("--white-colour-coordinates")
-                    .arg(format!(
-                        "0:{:.5},{:.5}",
-                        color_coords.white.0, color_coords.white.1
-                    ));
+                    .arg("-s")
+                    .arg(format!("white-coordinates-x={:.5}", color_coords.white.0))
+                    .arg("-s")
+                    .arg(format!("white-coordinates-y={:.5}", color_coords.white.1));
             }
         }
         if let Some(chapters) = chapters {
-            command
-                .arg("--chapter-language")
-                .arg("eng")
-                .arg("--chapters")
-                .arg(chapters);
+            command.arg("-c").arg(chapters);
         }
         command.arg(target);
         command

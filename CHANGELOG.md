@@ -1,3 +1,9 @@
+## Version 0.3.0
+
+- [Breaking] Rework how the remuxing works to use mkvtoolnix's header editor
+  - This avoids the need for remuxing and also fixes apparently a massive bug with muxing color primaries, etc.
+  - This means that the need for the third `output` parameter is removed.
+
 ## Version 0.2.2
 
 - Try ffprobe before mediainfo because it's faster and more likely to have the HDR info

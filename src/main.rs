@@ -7,7 +7,6 @@ mod values;
 use std::{env, path::PathBuf, process::exit};
 
 use clap::{App, Arg, ArgMatches};
-use dialoguer::Confirm;
 
 use crate::metadata::{extract_chapters, Metadata};
 
@@ -25,15 +24,9 @@ fn main() {
                 )
                 .arg(
                     Arg::new("target")
-                        .help("file to copy metadata to; this file is not modified directly")
+                        .help("file to copy metadata to; must be a matroska file")
                         .required(true)
                         .index(2),
-                )
-                .arg(
-                    Arg::new("output")
-                        .help("filename of the resulting combined file")
-                        .required(true)
-                        .index(3),
                 )
                 .arg(
                     Arg::new("chapters")
@@ -75,7 +68,6 @@ fn main() {
 fn copy(args: &ArgMatches) {
     let input = PathBuf::from(&args.value_of("input").expect("Value required by clap"));
     let target = PathBuf::from(&args.value_of("target").expect("Value required by clap"));
-    let output = PathBuf::from(&args.value_of("output").expect("Value required by clap"));
     let chapters = args.is_present("chapters");
 
     if !input.is_file() {
@@ -84,18 +76,6 @@ fn copy(args: &ArgMatches) {
     }
     if !target.is_file() {
         eprintln!("Target file {:?} does not exist", target);
-        exit(1);
-    }
-    if output.is_dir() {
-        eprintln!("Output location already exists as a directory--cannot proceed, exiting");
-        exit(1);
-    }
-    if output.is_file()
-        && !Confirm::new()
-            .with_prompt("Output file already exists. Overwrite?")
-            .interact()
-            .unwrap()
-    {
         exit(1);
     }
 
@@ -111,7 +91,7 @@ fn copy(args: &ArgMatches) {
     } else {
         None
     };
-    if let Err(e) = metadata.apply(&target, &output, chapters.as_deref()) {
+    if let Err(e) = metadata.apply(&target, chapters.as_deref()) {
         eprintln!("{}", e);
         exit(1);
     };

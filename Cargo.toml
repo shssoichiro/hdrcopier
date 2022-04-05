@@ -1,6 +1,6 @@
 [package]
 name = "hdrcopier"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.56"
 authors = ["Joshua Holmer <jholmer.in@gmail.com>"]
@@ -14,7 +14,6 @@ keywords = ["video", "multimedia"]
 [dependencies]
 anyhow = "1.0.51"
 clap = "3.0.13"
-dialoguer = "0.9.0"
 nom = "7.1.0"
 
 [profile.release]
