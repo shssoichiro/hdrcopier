@@ -1,14 +1,8 @@
 #![warn(clippy::all)]
 
-mod metadata;
-mod parse;
-mod values;
+use std::path::PathBuf;
 
-use std::{env, path::PathBuf, process::exit};
-
-use clap::{Arg, ArgMatches, Command};
-
-use crate::metadata::{extract_chapters, Metadata};
+use clap::{Arg, Command};
 
 fn main() {
     let args = Command::new("hdrcopier")
@@ -56,63 +50,24 @@ fn main() {
         .get_matches();
 
     match args.subcommand_name() {
-        Some("copy") => copy(args.subcommand_matches("copy").unwrap()),
-        Some("show") => show(args.subcommand_matches("show").unwrap()),
+        Some("copy") => {
+            let sub_args = args.subcommand_matches("copy").unwrap();
+            let input = PathBuf::from(&sub_args.value_of("input").expect("Value required by clap"));
+            let target =
+                PathBuf::from(&sub_args.value_of("target").expect("Value required by clap"));
+            let chapters = sub_args.is_present("chapters");
+
+            hdrcopier_core::copy(input, target, chapters)
+        }
+        Some("show") => {
+            let sub_args = args.subcommand_matches("show").unwrap();
+            let input = PathBuf::from(&sub_args.value_of("input").expect("Value required by clap"));
+
+            hdrcopier_core::show(input, sub_args.value_of("format"))
+        }
         _ => {
             eprintln!("Unrecognized command entered; see `hdrcopier -h` for usage");
-            exit(1);
+            std::process::exit(1);
         }
     }
-}
-
-fn copy(args: &ArgMatches) {
-    let input = PathBuf::from(&args.value_of("input").expect("Value required by clap"));
-    let target = PathBuf::from(&args.value_of("target").expect("Value required by clap"));
-    let chapters = args.is_present("chapters");
-
-    if !input.is_file() {
-        eprintln!("Input file {:?} does not exist", input);
-        exit(1);
-    }
-    if !target.is_file() {
-        eprintln!("Target file {:?} does not exist", target);
-        exit(1);
-    }
-
-    let metadata = match Metadata::parse(&input) {
-        Ok(metadata) => metadata,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
-    let chapters = if chapters {
-        extract_chapters(&input)
-    } else {
-        None
-    };
-    if let Err(e) = metadata.apply(&target, chapters.as_deref()) {
-        eprintln!("{}", e);
-        exit(1);
-    };
-
-    eprintln!("Done!");
-}
-
-fn show(args: &ArgMatches) {
-    let input = PathBuf::from(&args.value_of("input").expect("Value required by clap"));
-
-    if !input.is_file() {
-        eprintln!("Input file {:?} does not exist", input);
-        exit(1);
-    }
-
-    let metadata = match Metadata::parse(&input) {
-        Ok(metadata) => metadata,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
-    metadata.print(args.value_of("format"));
 }
