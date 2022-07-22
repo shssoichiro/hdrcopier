@@ -10,17 +10,13 @@
 
 ### Copy metadata
 
-`hdrcopier copy [input] [target] [output]`
+`hdrcopier copy [input] [target]`
 
 - input = file to copy metadata from
-- target = file to copy metadata to
-- output = location to place the resulting file
+- target = file to copy metadata into
 
-To clarify:
-The tool does not overwrite the `input` or `target` files,
-it takes the metadata from `input`,
-and the media streams from `target`,
-and muxes them together into `output`.
+The tool will parse the metadata from the input file,
+then update the target file with that metadata.
 
 ### Display metadata
 
