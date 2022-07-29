@@ -1,3 +1,7 @@
+## Version 0.3.2
+
+- Fix bug where copying settings may fail if chapters don't exist
+
 ## Version 0.3.1
 
 - Fix more bugs with color matrix setting
