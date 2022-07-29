@@ -12,7 +12,9 @@ use nom::{
 use crate::{
     metadata::{BasicMetadata, ColorCoordinates, HdrMetadata, Metadata},
     values::{
-        parse_color_primaries, parse_color_range, parse_matrix_coefficients,
+        parse_color_primaries,
+        parse_color_range,
+        parse_matrix_coefficients,
         parse_transfer_characteristics,
     },
 };
