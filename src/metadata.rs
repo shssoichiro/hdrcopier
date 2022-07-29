@@ -346,7 +346,7 @@ pub fn extract_chapters(input: &Path) -> Option<PathBuf> {
         .arg("chapters")
         .arg(&output)
         .status();
-    if result.is_ok() {
+    if result.is_ok() && output.exists() && output.metadata().expect("File exists").len() > 0 {
         Some(output)
     } else {
         None
