@@ -276,11 +276,17 @@ impl Metadata {
                 .arg(format!("colour-matrix-coefficients={}", basic.matrix));
         }
         if let Some(ref hdr_data) = self.hdr {
+            if hdr_data.max_content_light > 0 {
+                command
+                    .arg("-s")
+                    .arg(format!("max-content-light={}", hdr_data.max_content_light));
+            }
+            if hdr_data.max_frame_light > 0 {
+                command
+                    .arg("-s")
+                    .arg(format!("max-frame-light={}", hdr_data.max_frame_light));
+            }
             command
-                .arg("-s")
-                .arg(format!("max-content-light={}", hdr_data.max_content_light))
-                .arg("-s")
-                .arg(format!("max-frame-light={}", hdr_data.max_frame_light))
                 .arg("-s")
                 .arg(format!("max-luminance={}", hdr_data.max_luma))
                 .arg("-s")
