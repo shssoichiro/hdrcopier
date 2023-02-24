@@ -9,6 +9,10 @@ repository = "https://github.com/shssoichiro/hdrcopier"
 license = "MIT"
 keywords = ["video", "multimedia"]
 
+[[bin]]
+name = "hdrcopier"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
