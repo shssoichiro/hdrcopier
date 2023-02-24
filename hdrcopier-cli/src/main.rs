@@ -44,7 +44,7 @@ fn main() {
                         .long("format")
                         .short('f')
                         .takes_value(true)
-                        .possible_values(&["x265", "rav1e", "mkvmerge"]),
+                        .possible_values(["x265", "rav1e", "mkvmerge"]),
                 ),
         )
         .get_matches();
