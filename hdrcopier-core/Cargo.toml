@@ -14,3 +14,8 @@ keywords = ["video", "multimedia"]
 [dependencies]
 anyhow = "1.0.51"
 nom = "7.1.0"
+serde = { version = "1.0.164", features = ["derive"], optional = true }
+serde_json = { version = "1.0.96", optional = true }
+
+[features]
+save = ["dep:serde", "dep:serde_json"]
