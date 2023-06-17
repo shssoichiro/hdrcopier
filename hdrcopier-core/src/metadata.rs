@@ -185,9 +185,17 @@ impl Metadata {
             },
             if let Some(ref hdr_data) = self.hdr {
                 format!(
-                    " --max-luma {} --min-luma {:.4} --max-cll {},{} --master-display {}",
-                    hdr_data.max_luma,
-                    hdr_data.min_luma,
+                    " {}{} --max-cll {},{} --master-display {}",
+                    if hdr_data.max_luma > 0 {
+                        format!("--max-luma {} ", hdr_data.max_luma)
+                    } else {
+                        String::new()
+                    },
+                    if hdr_data.min_luma > 0.0 {
+                        format!("--min-luma {} ", hdr_data.min_luma.round() as u32)
+                    } else {
+                        String::new()
+                    },
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
                     format_master_display(
