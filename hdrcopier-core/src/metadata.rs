@@ -226,7 +226,7 @@ impl Metadata {
             },
             if let Some(ref hdr_data) = self.hdr {
                 format!(
-                    " --content-light {},{}{}",
+                    " --content-light {},{} --mastering-display {}",
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
                     format_master_display(
