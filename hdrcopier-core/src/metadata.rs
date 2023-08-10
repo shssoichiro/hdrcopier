@@ -11,8 +11,10 @@ use crate::{
         color_range_to_mkvedit_prop, print_color_primaries, print_color_range,
         print_matrix_coefficients, print_rav1e_color_primaries, print_rav1e_color_range,
         print_rav1e_matrix_coefficients, print_rav1e_transfer_characteristics,
-        print_transfer_characteristics, print_x265_color_primaries, print_x265_color_range,
-        print_x265_matrix_coefficients, print_x265_transfer_characteristics,
+        print_svtav1_color_primaries, print_svtav1_color_range, print_svtav1_matrix_coefficients,
+        print_svtav1_transfer_characteristics, print_transfer_characteristics,
+        print_x265_color_primaries, print_x265_color_range, print_x265_matrix_coefficients,
+        print_x265_transfer_characteristics,
     },
 };
 
@@ -118,6 +120,7 @@ impl Metadata {
         match format {
             None => self.print_human_readable_format(),
             Some("x265") => self.print_x265_args(),
+            Some("svt-av1") => self.print_svtav1_args(),
             Some("rav1e") => self.print_rav1e_args(),
             Some("mkvmerge") => self.print_mkvmerge_args(),
             _ => unreachable!("Unimplemented output format"),
@@ -203,6 +206,45 @@ impl Metadata {
                         hdr_data.max_luma,
                         hdr_data.min_luma
                     )
+                )
+            } else {
+                String::new()
+            }
+        );
+    }
+
+    fn print_svtav1_args(&self) {
+        println!(
+            "{}{}",
+            if let Some(ref basic) = self.basic {
+                format!(
+                    "--color-range {} --color-primaries {} --transfer-characteristics {} --matrix-coefficients {}",
+                    print_svtav1_color_range(basic.range),
+                    print_svtav1_color_primaries(basic.primaries),
+                    print_svtav1_transfer_characteristics(basic.transfer),
+                    print_svtav1_matrix_coefficients(basic.matrix)
+                )
+            } else {
+                String::new()
+            },
+            if let Some(ref hdr_data) = self.hdr {
+                format!(
+                    " --content-light {},{} --mastering-display {}",
+                    hdr_data.max_content_light,
+                    hdr_data.max_frame_light,
+                    format!(
+                        "G({},{})B({},{})R({},{})WP({},{})L({},{})",
+                        hdr_data.color_coords.as_ref().unwrap().green.0,
+                        hdr_data.color_coords.as_ref().unwrap().green.1,
+                        hdr_data.color_coords.as_ref().unwrap().blue.0,
+                        hdr_data.color_coords.as_ref().unwrap().blue.1,
+                        hdr_data.color_coords.as_ref().unwrap().red.0,
+                        hdr_data.color_coords.as_ref().unwrap().red.1,
+                        hdr_data.color_coords.as_ref().unwrap().white.0,
+                        hdr_data.color_coords.as_ref().unwrap().white.1,
+                        hdr_data.max_luma,
+                        hdr_data.min_luma,
+                    ),
                 )
             } else {
                 String::new()

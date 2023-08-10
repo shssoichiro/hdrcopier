@@ -39,6 +39,14 @@ pub fn print_rav1e_color_range(value: u8) -> &'static str {
     }
 }
 
+pub fn print_svtav1_color_range(value: u8) -> &'static str {
+    match value {
+        0 => "full",
+        1 => "studio",
+        _ => panic!("Unrecognized color range"),
+    }
+}
+
 pub fn parse_matrix_coefficients(value: &str) -> u8 {
     match value.to_lowercase().as_str() {
         "rgb" => 0,
@@ -94,6 +102,26 @@ pub fn print_x265_matrix_coefficients(value: u8) -> &'static str {
         // gbr
         // smpte2085
         // ictcp
+        _ => panic!("Unrecognized matrix coefficients"),
+    }
+}
+
+pub fn print_svtav1_matrix_coefficients(value: u8) -> &'static str {
+    match value {
+        0 => "identity",
+        1 => "bt709",
+        2 => "unspecified",
+        4 => "fcc",
+        5 => "bt470bg",
+        6 => "bt601",
+        7 => "smpte240",
+        8 => "ycgco",
+        9 => "bt2020-ncl",
+        10 => "bt2020-cl",
+        11 => "smpte2085",
+        12 => "chroma-ncl",
+        13 => "chroma-cl",
+        14 => "ictcp",
         _ => panic!("Unrecognized matrix coefficients"),
     }
 }
@@ -186,6 +214,29 @@ pub fn print_x265_transfer_characteristics(value: u8) -> &'static str {
     }
 }
 
+pub fn print_svtav1_transfer_characteristics(value: u8) -> &'static str {
+    match value {
+        1 => "bt709",
+        2 => "unspecified",
+        4 => "bt470m",
+        5 => "bt470bg",
+        6 => "bt601",
+        7 => "smpte240",
+        8 => "linear",
+        9 => "log100",
+        10 => "log100-sqrt10",
+        11 => "iec61966",
+        12 => "bt1361",
+        13 => "srgb",
+        14 => "bt2020-10",
+        15 => "bt2020-12",
+        16 => "smpte2084",
+        17 => "smpte428",
+        18 => "hlg",
+        _ => panic!("Unrecognized matrix coefficients"),
+    }
+}
+
 pub fn print_rav1e_transfer_characteristics(value: u8) -> &'static str {
     match value {
         1 => "BT709",
@@ -261,6 +312,24 @@ pub fn print_x265_color_primaries(value: u8) -> &'static str {
         11 => "smpte431",
         12 => "smpte432",
         22 => panic!("EBU 3213 E not supported by x265"),
+        _ => panic!("Unrecognized color primaries"),
+    }
+}
+
+pub fn print_svtav1_color_primaries(value: u8) -> &'static str {
+    match value {
+        1 => "bt709",
+        2 => "unspecified",
+        4 => "bt470m",
+        5 => "bt470bg",
+        6 => "bt601",
+        7 => "smpte240",
+        8 => "film",
+        9 => "bt2020",
+        10 => "xyz",
+        11 => "smpte431",
+        12 => "smpte432",
+        22 => "ebu3213",
         _ => panic!("Unrecognized color primaries"),
     }
 }
