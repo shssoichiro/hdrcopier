@@ -165,6 +165,7 @@ pub fn parse_transfer_characteristics(value: &str) -> u8 {
         "bt.2020 12-bit" => 15,
         "pq" | "smpte 2084" => 16,
         "arib b67" => 18,
+        "hlg" => 19,
         _ => panic!("Unrecognized transfer characteristics"),
     }
 }
@@ -186,6 +187,7 @@ pub fn print_transfer_characteristics(value: u8) -> &'static str {
         15 => "BT.2020 12-bit",
         16 => "PQ/SMPTE 2084",
         18 => "ARIB B67",
+        19 => "HLG",
         _ => panic!("Unrecognized transfer characteristics"),
     }
 }
@@ -232,7 +234,7 @@ pub fn print_svtav1_transfer_characteristics(value: u8) -> &'static str {
         15 => "bt2020-12",
         16 => "smpte2084",
         17 => "smpte428",
-        18 => "hlg",
+        19 => "hlg",
         _ => panic!("Unrecognized matrix coefficients"),
     }
 }
