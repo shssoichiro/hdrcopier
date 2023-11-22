@@ -17,4 +17,4 @@ path = "src/main.rs"
 
 [dependencies]
 hdrcopier-core = { path = "../hdrcopier-core" }
-clap = "3.0.13"
+clap = "4.4.8"

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 
 fn main() {
     let args = Command::new("hdrcopier")
@@ -26,7 +26,7 @@ fn main() {
                     Arg::new("chapters")
                         .help("Also copy chapters from input to output")
                         .long("chapters")
-                        .takes_value(false),
+                        .action(ArgAction::SetTrue),
                 ),
         )
         .subcommand(
@@ -43,8 +43,7 @@ fn main() {
                         .help("display output in a CLI-compatible format")
                         .long("format")
                         .short('f')
-                        .takes_value(true)
-                        .possible_values(["x265", "svt-av1", "rav1e", "mkvmerge"]),
+                        .value_parser(["x265", "svt-av1", "rav1e", "mkvmerge"]),
                 ),
         )
         .get_matches();
@@ -52,18 +51,22 @@ fn main() {
     match args.subcommand_name() {
         Some("copy") => {
             let sub_args = args.subcommand_matches("copy").unwrap();
-            let input = PathBuf::from(&sub_args.value_of("input").expect("Value required by clap"));
-            let target =
-                PathBuf::from(&sub_args.value_of("target").expect("Value required by clap"));
-            let chapters = sub_args.is_present("chapters");
+            let input = PathBuf::from(sub_args.get_one::<String>("input").expect("Value required"));
+            let target = PathBuf::from(
+                sub_args
+                    .get_one::<String>("target")
+                    .expect("Value required"),
+            );
+            let chapters = sub_args.get_flag("chapters");
 
             hdrcopier_core::copy(input, target, chapters)
         }
         Some("show") => {
             let sub_args = args.subcommand_matches("show").unwrap();
-            let input = PathBuf::from(&sub_args.value_of("input").expect("Value required by clap"));
+            let input = PathBuf::from(sub_args.get_one::<String>("input").expect("Value required"));
 
-            hdrcopier_core::show(input, sub_args.value_of("format"))
+            let format: Option<&String> = sub_args.get_one("format");
+            hdrcopier_core::show(input, format.map(|s| s.as_str()))
         }
         _ => {
             eprintln!("Unrecognized command entered; see `hdrcopier -h` for usage");
