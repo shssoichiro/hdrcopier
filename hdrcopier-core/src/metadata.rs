@@ -19,12 +19,14 @@ use crate::{
 };
 
 #[derive(Default)]
+#[cfg_attr(feature = "save", derive(serde::Serialize, serde::Deserialize))]
 pub struct Metadata {
     pub basic: Option<BasicMetadata>,
     pub hdr: Option<HdrMetadata>,
 }
 
 #[derive(Default)]
+#[cfg_attr(feature = "save", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasicMetadata {
     pub matrix: u8,
     pub range: u8,
@@ -33,6 +35,7 @@ pub struct BasicMetadata {
 }
 
 #[derive(Default)]
+#[cfg_attr(feature = "save", derive(serde::Serialize, serde::Deserialize))]
 pub struct ColorCoordinates {
     pub red: (f64, f64),
     pub green: (f64, f64),
@@ -41,6 +44,7 @@ pub struct ColorCoordinates {
 }
 
 #[derive(Default)]
+#[cfg_attr(feature = "save", derive(serde::Serialize, serde::Deserialize))]
 pub struct HdrMetadata {
     pub color_coords: Option<ColorCoordinates>,
     pub max_luma: u32,
