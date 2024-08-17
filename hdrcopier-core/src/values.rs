@@ -62,7 +62,7 @@ pub fn parse_matrix_coefficients(value: &str) -> u8 {
         // FIXME: Not sure how these two are formatted in mediainfo
         // VSC_MATRIX_CHROMATICITY_DERIVED_NCL = 12,
         // VSC_MATRIX_CHROMATICITY_DERIVED_CL = 13,
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -80,7 +80,7 @@ pub fn print_matrix_coefficients(value: u8) -> &'static str {
         10 => "BT.2020 Constant Light",
         12 => "Chroma-Derived Non-Constant Light",
         13 => "Chroma-Derived Constant Light",
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -102,7 +102,7 @@ pub fn print_x265_matrix_coefficients(value: u8) -> &'static str {
         // gbr
         // smpte2085
         // ictcp
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -122,7 +122,7 @@ pub fn print_svtav1_matrix_coefficients(value: u8) -> &'static str {
         12 => "chroma-ncl",
         13 => "chroma-cl",
         14 => "ictcp",
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -144,7 +144,7 @@ pub fn print_rav1e_matrix_coefficients(value: u8) -> &'static str {
         // Identity
         // SMPTE2085
         // ICtCp
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -166,7 +166,7 @@ pub fn parse_transfer_characteristics(value: &str) -> u8 {
         "pq" | "smpte 2084" => 16,
         "arib b67" => 18,
         "hlg" => 19,
-        _ => panic!("Unrecognized transfer characteristics"),
+        _ => panic!("Unrecognized transfer characteristics: {value}"),
     }
 }
 
@@ -188,7 +188,7 @@ pub fn print_transfer_characteristics(value: u8) -> &'static str {
         16 => "PQ/SMPTE 2084",
         18 => "ARIB B67",
         19 => "HLG",
-        _ => panic!("Unrecognized transfer characteristics"),
+        _ => panic!("Unrecognized transfer characteristics: {value}"),
     }
 }
 
@@ -212,7 +212,7 @@ pub fn print_x265_transfer_characteristics(value: u8) -> &'static str {
         // FIXME: The following are x265 options with an unknown number value
         // bt1361e
         // smpte428
-        _ => panic!("Unrecognized transfer characteristics"),
+        _ => panic!("Unrecognized transfer characteristics: {value}"),
     }
 }
 
@@ -235,7 +235,7 @@ pub fn print_svtav1_transfer_characteristics(value: u8) -> &'static str {
         16 => "smpte2084",
         17 => "smpte428",
         19 => "hlg",
-        _ => panic!("Unrecognized matrix coefficients"),
+        _ => panic!("Unrecognized matrix coefficients: {value}"),
     }
 }
 
@@ -260,7 +260,7 @@ pub fn print_rav1e_transfer_characteristics(value: u8) -> &'static str {
         // BT1361
         // SMPTE428
         // HLG
-        _ => panic!("Unrecognized transfer characteristics"),
+        _ => panic!("Unrecognized transfer characteristics: {value}"),
     }
 }
 
@@ -278,7 +278,7 @@ pub fn parse_color_primaries(value: &str) -> u8 {
         "smpte 431.2" => 11,
         "smpte 432.1" => 12,
         "ebu 3213 e" => 22,
-        _ => panic!("Unrecognized color primaries"),
+        _ => panic!("Unrecognized color primaries: {value}"),
     }
 }
 
@@ -296,7 +296,7 @@ pub fn print_color_primaries(value: u8) -> &'static str {
         11 => "SMPTE 431.2",
         12 => "SMPTE 432.1",
         22 => "EBU 3213 E",
-        _ => panic!("Unrecognized color primaries"),
+        _ => panic!("Unrecognized color primaries: {value}"),
     }
 }
 
@@ -314,7 +314,7 @@ pub fn print_x265_color_primaries(value: u8) -> &'static str {
         11 => "smpte431",
         12 => "smpte432",
         22 => panic!("EBU 3213 E not supported by x265"),
-        _ => panic!("Unrecognized color primaries"),
+        _ => panic!("Unrecognized color primaries: {value}"),
     }
 }
 
@@ -332,7 +332,7 @@ pub fn print_svtav1_color_primaries(value: u8) -> &'static str {
         11 => "smpte431",
         12 => "smpte432",
         22 => "ebu3213",
-        _ => panic!("Unrecognized color primaries"),
+        _ => panic!("Unrecognized color primaries: {value}"),
     }
 }
 
@@ -352,6 +352,6 @@ pub fn print_rav1e_color_primaries(value: u8) -> &'static str {
         22 => "EBU3213",
         // FIXME: The following are rav1e options with an unknown number value
         // XYZ
-        _ => panic!("Unrecognized color primaries"),
+        _ => panic!("Unrecognized color primaries: {value}"),
     }
 }
