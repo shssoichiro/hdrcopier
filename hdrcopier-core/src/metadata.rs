@@ -371,21 +371,27 @@ impl Metadata {
         let mut command = Command::new("mkvpropedit");
         command.arg("-e").arg("track:v1");
         if let Some(ref basic) = self.basic {
-            command
-                .arg("-s")
-                .arg(format!(
-                    "colour-range={}",
-                    color_range_to_mkvedit_prop(basic.range)
-                ))
-                .arg("-s")
-                .arg(format!(
+            if basic.transfer != 2 {
+                command.arg("-s").arg(format!(
                     "colour-transfer-characteristics={}",
                     basic.transfer
-                ))
-                .arg("-s")
-                .arg(format!("colour-primaries={}", basic.primaries))
-                .arg("-s")
-                .arg(format!("colour-matrix-coefficients={}", basic.matrix))
+                ));
+            }
+            if basic.primaries != 2 {
+                command
+                    .arg("-s")
+                    .arg(format!("colour-primaries={}", basic.primaries));
+            }
+            if basic.matrix != 2 {
+                command
+                    .arg("-s")
+                    .arg(format!("colour-matrix-coefficients={}", basic.matrix));
+            }
+            command.arg("-s").arg(format!(
+                "colour-range={}",
+                color_range_to_mkvedit_prop(basic.range)
+            ));
+            command
                 .arg("-s")
                 .arg(format!(
                     "chroma-siting-horizontal={}",
