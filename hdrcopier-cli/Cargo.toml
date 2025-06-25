@@ -16,5 +16,5 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hdrcopier-core = { path = "../hdrcopier-core" }
+hdrcopier-core = { version = "0.4.0", path = "../hdrcopier-core" }
 clap = "4.4.8"
