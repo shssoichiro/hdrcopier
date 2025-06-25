@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -11,28 +12,94 @@ use crate::{
         color_range_to_mkvedit_prop, print_color_primaries, print_color_range,
         print_matrix_coefficients, print_rav1e_color_primaries, print_rav1e_color_range,
         print_rav1e_matrix_coefficients, print_rav1e_transfer_characteristics,
-        print_svtav1_color_primaries, print_svtav1_color_range, print_svtav1_matrix_coefficients,
-        print_svtav1_transfer_characteristics, print_transfer_characteristics,
-        print_x265_color_primaries, print_x265_color_range, print_x265_matrix_coefficients,
+        print_svtav1_chroma_location, print_svtav1_color_primaries, print_svtav1_color_range,
+        print_svtav1_matrix_coefficients, print_svtav1_transfer_characteristics,
+        print_transfer_characteristics, print_x265_chroma_location, print_x265_color_primaries,
+        print_x265_color_range, print_x265_matrix_coefficients,
         print_x265_transfer_characteristics,
     },
 };
 
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Metadata {
     pub basic: Option<BasicMetadata>,
     pub hdr: Option<HdrMetadata>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct BasicMetadata {
     pub matrix: u8,
-    pub range: u8,
     pub transfer: u8,
     pub primaries: u8,
+    pub range: u8,
+    pub chroma_location: ChromaLocation,
 }
 
-#[derive(Default)]
+impl Default for BasicMetadata {
+    fn default() -> Self {
+        Self {
+            matrix: 2,
+            transfer: 2,
+            primaries: 2,
+            range: 1,
+            chroma_location: ChromaLocation::Left,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum ChromaLocation {
+    #[default]
+    Left = 0,
+    Center = 1,
+    TopLeft = 2,
+    Top = 3,
+    BottomLeft = 4,
+    Bottom = 5,
+}
+
+impl ChromaLocation {
+    pub fn get_horiz(&self) -> u8 {
+        // 0 = unspecified
+        // 1 = left collocated
+        // 2 = half
+        match self {
+            ChromaLocation::Left | ChromaLocation::TopLeft | ChromaLocation::BottomLeft => 1,
+            ChromaLocation::Center | ChromaLocation::Top | ChromaLocation::Bottom => 2,
+        }
+    }
+
+    pub fn get_vert(&self) -> u8 {
+        // 0 = unspecified
+        // 1 = top collocated
+        // 2 = half
+        // 3 = bottom collocated -- I'm not entirely certain if the mkv spec supports this?
+        match self {
+            ChromaLocation::TopLeft | ChromaLocation::Top => 1,
+            ChromaLocation::Left | ChromaLocation::Center => 2,
+            ChromaLocation::BottomLeft | ChromaLocation::Bottom => 3,
+        }
+    }
+}
+
+impl Display for ChromaLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ChromaLocation::Left => "Left",
+                ChromaLocation::Center => "Center",
+                ChromaLocation::TopLeft => "Top-Left",
+                ChromaLocation::Top => "Top",
+                ChromaLocation::BottomLeft => "Bottom-Left",
+                ChromaLocation::Bottom => "Bottom",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ColorCoordinates {
     pub red: (f64, f64),
     pub green: (f64, f64),
@@ -40,7 +107,7 @@ pub struct ColorCoordinates {
     pub white: (f64, f64),
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct HdrMetadata {
     pub color_coords: Option<ColorCoordinates>,
     pub max_luma: u32,
@@ -142,6 +209,7 @@ impl Metadata {
                 "Matrix Coefficients: {}",
                 print_matrix_coefficients(basic.matrix)
             );
+            println!("Chroma Position: {}", basic.chroma_location);
         }
         if let Some(ref hdr_data) = self.hdr {
             println!("Max Content Light Level: {}", hdr_data.max_content_light);
@@ -177,11 +245,12 @@ impl Metadata {
             "{}{}",
             if let Some(ref basic) = self.basic {
                 format!(
-                    "--range {} --colorprim {} --transfer {} --colormatrix {}",
+                    "--range {} --colorprim {} --transfer {} --colormatrix {} --chromaloc {}",
                     print_x265_color_range(basic.range),
                     print_x265_color_primaries(basic.primaries),
                     print_x265_transfer_characteristics(basic.transfer),
-                    print_x265_matrix_coefficients(basic.matrix)
+                    print_x265_matrix_coefficients(basic.matrix),
+                    print_x265_chroma_location(basic.chroma_location),
                 )
             } else {
                 String::new()
@@ -218,33 +287,33 @@ impl Metadata {
             "{}{}",
             if let Some(ref basic) = self.basic {
                 format!(
-                    "--color-range {} --color-primaries {} --transfer-characteristics {} --matrix-coefficients {}",
+                    "--color-range {} --color-primaries {} --transfer-characteristics {} \
+                     --matrix-coefficients {} --chroma-sample-position {}",
                     print_svtav1_color_range(basic.range),
                     print_svtav1_color_primaries(basic.primaries),
                     print_svtav1_transfer_characteristics(basic.transfer),
-                    print_svtav1_matrix_coefficients(basic.matrix)
+                    print_svtav1_matrix_coefficients(basic.matrix),
+                    print_svtav1_chroma_location(basic.chroma_location),
                 )
             } else {
                 String::new()
             },
             if let Some(ref hdr_data) = self.hdr {
                 format!(
-                    " --content-light {},{} --mastering-display {}",
+                    " --content-light {},{} --mastering-display \
+                     G({},{})B({},{})R({},{})WP({},{})L({},{})",
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
-                    format!(
-                        "G({},{})B({},{})R({},{})WP({},{})L({},{})",
-                        hdr_data.color_coords.as_ref().unwrap().green.0,
-                        hdr_data.color_coords.as_ref().unwrap().green.1,
-                        hdr_data.color_coords.as_ref().unwrap().blue.0,
-                        hdr_data.color_coords.as_ref().unwrap().blue.1,
-                        hdr_data.color_coords.as_ref().unwrap().red.0,
-                        hdr_data.color_coords.as_ref().unwrap().red.1,
-                        hdr_data.color_coords.as_ref().unwrap().white.0,
-                        hdr_data.color_coords.as_ref().unwrap().white.1,
-                        hdr_data.max_luma,
-                        hdr_data.min_luma,
-                    ),
+                    hdr_data.color_coords.as_ref().unwrap().green.0,
+                    hdr_data.color_coords.as_ref().unwrap().green.1,
+                    hdr_data.color_coords.as_ref().unwrap().blue.0,
+                    hdr_data.color_coords.as_ref().unwrap().blue.1,
+                    hdr_data.color_coords.as_ref().unwrap().red.0,
+                    hdr_data.color_coords.as_ref().unwrap().red.1,
+                    hdr_data.color_coords.as_ref().unwrap().white.0,
+                    hdr_data.color_coords.as_ref().unwrap().white.1,
+                    hdr_data.max_luma,
+                    hdr_data.min_luma,
                 )
             } else {
                 String::new()
@@ -256,6 +325,7 @@ impl Metadata {
         println!(
             "{}{}",
             if let Some(ref basic) = self.basic {
+                // rav1e does not support a chroma location parameter
                 format!(
                     "--range {} --primaries {} --transfer {} --matrix {}",
                     print_rav1e_color_range(basic.range),
@@ -315,7 +385,17 @@ impl Metadata {
                 .arg("-s")
                 .arg(format!("colour-primaries={}", basic.primaries))
                 .arg("-s")
-                .arg(format!("colour-matrix-coefficients={}", basic.matrix));
+                .arg(format!("colour-matrix-coefficients={}", basic.matrix))
+                .arg("-s")
+                .arg(format!(
+                    "chroma-siting-horizontal={}",
+                    basic.chroma_location.get_horiz()
+                ))
+                .arg("-s")
+                .arg(format!(
+                    "chroma-siting-vertical={}",
+                    basic.chroma_location.get_vert()
+                ));
         }
         if let Some(ref hdr_data) = self.hdr {
             if hdr_data.max_content_light > 0 {

@@ -1,3 +1,5 @@
+use crate::metadata::ChromaLocation;
+
 pub fn parse_color_range(value: &str) -> u8 {
     match value.to_lowercase().as_str() {
         "limited" => 1,
@@ -103,6 +105,20 @@ pub fn print_x265_matrix_coefficients(value: u8) -> &'static str {
         // smpte2085
         // ictcp
         _ => panic!("Unrecognized matrix coefficients: {value}"),
+    }
+}
+
+pub fn print_x265_chroma_location(value: ChromaLocation) -> u8 {
+    value as u8
+}
+
+pub fn print_svtav1_chroma_location(value: ChromaLocation) -> &'static str {
+    // svt only supports left and top left, so for the others we should leave
+    // it at unknown and let mkvmerge handle setting it on the container
+    match value {
+        ChromaLocation::Left => "left",
+        ChromaLocation::TopLeft => "topleft",
+        _ => "unknown",
     }
 }
 
