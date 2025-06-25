@@ -1,6 +1,6 @@
 use std::{path::Path, process::Command};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use nom::{
     bytes::complete::tag,
     character::complete::{char, digit1},
@@ -10,7 +10,7 @@ use nom::{
 };
 
 use crate::{
-    metadata::{BasicMetadata, ColorCoordinates, HdrMetadata, Metadata},
+    metadata::{BasicMetadata, ChromaLocation, ColorCoordinates, HdrMetadata, Metadata},
     values::{
         parse_color_primaries, parse_color_range, parse_matrix_coefficients,
         parse_transfer_characteristics,
@@ -21,6 +21,8 @@ use crate::{
 //
 // |    + Colour matrix coefficients: 9
 // |    + Colour range: 1
+// |    + Horizontal chroma siting: 2
+// |    + Vertical chroma siting: 2
 // |    + Colour transfer: 16
 // |    + Colour primaries: 9
 // |    + Maximum content light: 944
@@ -46,6 +48,7 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
     let mut has_basic = false;
     let mut hdr = HdrMetadata::default();
     let mut has_hdr = false;
+    let mut chroma_location = (0, 0);
     for line in output.lines() {
         if line.contains("Colour matrix coefficients:") {
             basic.matrix = line.split_once(": ").unwrap().1.parse()?;
@@ -64,6 +67,16 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
         }
         if line.contains("Colour primaries:") {
             basic.primaries = line.split_once(": ").unwrap().1.parse()?;
+            has_basic = true;
+            continue;
+        }
+        if line.contains("Horizontal chroma siting:") {
+            chroma_location.0 = line.split_once(": ").unwrap().1.parse()?;
+            has_basic = true;
+            continue;
+        }
+        if line.contains("Vertical chroma siting:") {
+            chroma_location.1 = line.split_once(": ").unwrap().1.parse()?;
             has_basic = true;
             continue;
         }
@@ -132,6 +145,45 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
         }
     }
 
+    if has_basic {
+        basic.chroma_location = match chroma_location {
+            (0, 0) => {
+                // This matches mpv's defaults
+                match basic.range {
+                    // Full
+                    0 => ChromaLocation::Center,
+                    // Limited
+                    1 => ChromaLocation::Left,
+                    _ => bail!("Unrecognized color range"),
+                }
+            }
+            (0, 1) => match basic.range {
+                0 => ChromaLocation::Top,
+                1 => ChromaLocation::TopLeft,
+                _ => bail!("Unrecognized color range"),
+            },
+            (0, 2) => match basic.range {
+                0 => ChromaLocation::Center,
+                1 => ChromaLocation::Left,
+                _ => bail!("Unrecognized color range"),
+            },
+            (0, 3) => match basic.range {
+                0 => ChromaLocation::Bottom,
+                1 => ChromaLocation::BottomLeft,
+                _ => bail!("Unrecognized color range"),
+            },
+            (1, 0) => ChromaLocation::Left,
+            (1, 1) => ChromaLocation::TopLeft,
+            (1, 2) => ChromaLocation::Left,
+            (1, 3) => ChromaLocation::BottomLeft,
+            (2, 0) => ChromaLocation::Center,
+            (2, 1) => ChromaLocation::Top,
+            (2, 2) => ChromaLocation::Center,
+            (2, 3) => ChromaLocation::Bottom,
+            (x, y) => bail!("Unrecognized chroma location values: {x}, {y}"),
+        }
+    }
+
     Ok(Metadata {
         basic: if has_basic { Some(basic) } else { None },
         hdr: if has_hdr { Some(hdr) } else { None },
@@ -154,6 +206,8 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
 // Maximum Frame-Average Light Level        : 143 cd/m2
 //
 // We need this if the metadata was encoded into the video stream by x265.
+// Note that MediaInfo does not print the chroma location, so we should
+// always prefer mkvinfo's basic output if we have it.
 pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
     let result = Command::new("mediainfo").arg(input).output()?;
     let output = String::from_utf8_lossy(&result.stdout);
