@@ -1,3 +1,7 @@
+## Version 0.4.2
+
+- Fix parsing error when mCLL or mFALL are over 1000
+
 ## Version 0.4.1
 
 - Do not copy unspecified metadata
