@@ -249,6 +249,7 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
                 .unwrap()
                 .1
                 .trim_end_matches(" cd/m2")
+                .replace(' ', "")
                 .parse()?;
             continue;
         }
@@ -258,6 +259,7 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
                 .unwrap()
                 .1
                 .trim_end_matches(" cd/m2")
+                .replace(' ', "")
                 .parse()?;
             continue;
         }
