@@ -1,3 +1,7 @@
+## Version 0.4.3
+
+- Fix incorrect max/min luma values when printing x265 args
+
 ## Version 0.4.2
 
 - Fix parsing error when mCLL or mFALL are over 1000

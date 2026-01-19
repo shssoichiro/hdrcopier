@@ -476,8 +476,8 @@ fn format_master_display(coords: &ColorCoordinates, max_luma: u32, min_luma: f64
         (coords.red.1 * 50000.).round() as u32,
         (coords.white.0 * 50000.).round() as u32,
         (coords.white.1 * 50000.).round() as u32,
-        max_luma * 50000,
-        (min_luma * 50000.).round() as u32,
+        max_luma * 10000,
+        (min_luma * 10000.).round() as u32,
     )
 }
 

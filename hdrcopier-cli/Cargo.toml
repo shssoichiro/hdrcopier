@@ -1,6 +1,6 @@
 [package]
 name = "hdrcopier-cli"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 rust-version = "1.56"
 authors = ["Joshua Holmer <jholmer.in@gmail.com>"]
@@ -16,5 +16,5 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hdrcopier-core = { version = "0.4.1", path = "../hdrcopier-core" }
+hdrcopier-core = { version = "0.4.3", path = "../hdrcopier-core" }
 clap = "4.4.8"
