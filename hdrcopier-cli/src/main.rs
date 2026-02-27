@@ -34,6 +34,7 @@ fn run() -> Result<()> {
                     Arg::new("chapters")
                         .help("Also copy chapters from input to output")
                         .long("chapters")
+                        .short('c')
                         .action(ArgAction::SetTrue),
                 ),
         )
