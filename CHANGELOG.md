@@ -1,3 +1,10 @@
+## Version 0.5.0
+
+- Add proper error handling for the library
+- Bump Rust edition to 2024
+- Bump MSRV to 1.85
+- Add `-c` shorthand for `--chapters`
+
 ## Version 0.4.3
 
 - Fix incorrect max/min luma values when printing x265 args
