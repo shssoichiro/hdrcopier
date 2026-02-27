@@ -1,3 +1,7 @@
+## Version 0.5.1
+
+- Do not error on chapter extraction if source has no chapters
+
 ## Version 0.5.0
 
 - Add proper error handling for the library

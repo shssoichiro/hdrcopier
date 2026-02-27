@@ -509,10 +509,7 @@ pub fn extract_chapters(input: &Path) -> Result<Option<PathBuf>> {
     run_command_output(&mut command, "mkvextract")?;
 
     if !output.exists() {
-        return Err(Error::UnexpectedOutput {
-            tool: "mkvextract",
-            line: format!("Expected chapter output file was not created: {:?}", output),
-        });
+        return Ok(None);
     }
 
     let chapter_metadata = output.metadata().map_err(|source| Error::Io {
