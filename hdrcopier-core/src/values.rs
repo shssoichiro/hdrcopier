@@ -1,4 +1,4 @@
-use crate::{metadata::ChromaLocation, Error, Result};
+use crate::{Error, Result, metadata::ChromaLocation};
 
 fn unsupported_value(kind: &'static str, value: impl ToString) -> Error {
     Error::UnsupportedValue {

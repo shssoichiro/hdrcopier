@@ -9,7 +9,7 @@ mod values;
 use std::path::PathBuf;
 
 pub use crate::error::{Error, Result};
-use crate::metadata::{extract_chapters, Metadata};
+use crate::metadata::{Metadata, extract_chapters};
 
 pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) -> Result<()> {
     if !input.is_file() {

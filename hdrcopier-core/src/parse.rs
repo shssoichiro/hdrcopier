@@ -1,16 +1,13 @@
 use std::{path::Path, process::Command};
 
 use crate::{
+    Error, Result,
     metadata::{BasicMetadata, ChromaLocation, ColorCoordinates, HdrMetadata, Metadata},
     tools::run_command_output,
     values::{
-        parse_color_primaries,
-        parse_color_range,
-        parse_matrix_coefficients,
+        parse_color_primaries, parse_color_range, parse_matrix_coefficients,
         parse_transfer_characteristics,
     },
-    Error,
-    Result,
 };
 
 // MKVInfo may include data that looks like this:

@@ -1,7 +1,7 @@
 [package]
 name = "hdrcopier-core"
 version = "0.4.3"
-edition = "2021"
+edition = "2024"
 rust-version = "1.85"
 authors = ["Joshua Holmer <jholmer.in@gmail.com>"]
 description = "A tool for copying colorspace and HDR metadata from one file to another"
