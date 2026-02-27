@@ -2,9 +2,17 @@
 
 use std::path::PathBuf;
 
+use anyhow::{anyhow, Context, Result};
 use clap::{Arg, ArgAction, Command};
 
 fn main() {
+    if let Err(error) = run() {
+        eprintln!("{error:#}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let args = Command::new("hdrcopier")
         .version(env!("CARGO_PKG_VERSION"))
         .subcommand(
@@ -48,29 +56,42 @@ fn main() {
         )
         .get_matches();
 
-    match args.subcommand_name() {
-        Some("copy") => {
-            let sub_args = args.subcommand_matches("copy").unwrap();
-            let input = PathBuf::from(sub_args.get_one::<String>("input").expect("Value required"));
+    match args.subcommand() {
+        Some(("copy", sub_args)) => {
+            let input = PathBuf::from(
+                sub_args
+                    .get_one::<String>("input")
+                    .context("missing required argument: input")?,
+            );
             let target = PathBuf::from(
                 sub_args
                     .get_one::<String>("target")
-                    .expect("Value required"),
+                    .context("missing required argument: target")?,
             );
             let chapters = sub_args.get_flag("chapters");
 
-            hdrcopier_core::copy(input, target, chapters)
+            hdrcopier_core::copy(input, target, chapters)?;
+            eprintln!("Done!");
         }
-        Some("show") => {
-            let sub_args = args.subcommand_matches("show").unwrap();
-            let input = PathBuf::from(sub_args.get_one::<String>("input").expect("Value required"));
+        Some(("show", sub_args)) => {
+            let input = PathBuf::from(
+                sub_args
+                    .get_one::<String>("input")
+                    .context("missing required argument: input")?,
+            );
 
             let format: Option<&String> = sub_args.get_one("format");
-            hdrcopier_core::show(input, format.map(|s| s.as_str()))
+            hdrcopier_core::show(input, format.map(|s| s.as_str()))?;
         }
-        _ => {
-            eprintln!("Unrecognized command entered; see `hdrcopier -h` for usage");
-            std::process::exit(1);
+        Some((command, _)) => {
+            return Err(anyhow!(
+                "Unrecognized command entered: {command}; see `hdrcopier -h` for usage"
+            ));
+        }
+        None => {
+            return Err(anyhow!("No command entered; see `hdrcopier -h` for usage"));
         }
     }
+
+    Ok(())
 }

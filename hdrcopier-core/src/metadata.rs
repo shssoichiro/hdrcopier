@@ -1,23 +1,36 @@
 use std::{
     fmt::Display,
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
 
-use anyhow::Result;
-
 use crate::{
     parse::{parse_ffprobe, parse_mediainfo, parse_mkvinfo},
+    tools::{ensure_tools_in_path, run_command_output},
     values::{
-        color_range_to_mkvedit_prop, print_color_primaries, print_color_range,
-        print_matrix_coefficients, print_rav1e_color_primaries, print_rav1e_color_range,
-        print_rav1e_matrix_coefficients, print_rav1e_transfer_characteristics,
-        print_svtav1_chroma_location, print_svtav1_color_primaries, print_svtav1_color_range,
-        print_svtav1_matrix_coefficients, print_svtav1_transfer_characteristics,
-        print_transfer_characteristics, print_x265_chroma_location, print_x265_color_primaries,
-        print_x265_color_range, print_x265_matrix_coefficients,
+        color_range_to_mkvedit_prop,
+        print_color_primaries,
+        print_color_range,
+        print_matrix_coefficients,
+        print_rav1e_color_primaries,
+        print_rav1e_color_range,
+        print_rav1e_matrix_coefficients,
+        print_rav1e_transfer_characteristics,
+        print_svtav1_chroma_location,
+        print_svtav1_color_primaries,
+        print_svtav1_color_range,
+        print_svtav1_matrix_coefficients,
+        print_svtav1_transfer_characteristics,
+        print_transfer_characteristics,
+        print_x265_chroma_location,
+        print_x265_color_primaries,
+        print_x265_color_range,
+        print_x265_matrix_coefficients,
         print_x265_transfer_characteristics,
     },
+    Error,
+    Result,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -126,37 +139,26 @@ impl Metadata {
     //
     // Encoding is dumb.
     pub fn parse(input: &Path) -> Result<Self> {
+        ensure_tools_in_path(&["ffprobe", "mkvinfo", "mediainfo"])?;
+
         let mut data = Metadata::default();
-        match parse_mkvinfo(input) {
-            Ok(info) => {
-                data = info;
-            }
-            Err(e) => {
-                eprintln!("Warning: {}", e);
-            }
+        if let Ok(info) = parse_mkvinfo(input) {
+            data = info;
         }
-        if data.basic.is_some()
-            && data.hdr.is_some()
-            && data.hdr.as_ref().unwrap().color_coords.is_some()
-        {
+
+        if has_hdr_with_coords(&data) && data.basic.is_some() {
             return Ok(data);
         }
 
-        match parse_mediainfo(input) {
-            Ok(info) => {
-                if data.basic.is_none() && info.basic.is_some() {
-                    data.basic = info.basic;
-                }
-                if info.hdr.is_some() {
-                    data.hdr = info.hdr;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                anyhow::bail!("Unable to parse metadata");
-            }
+        let info = parse_mediainfo(input)?;
+        if data.basic.is_none() && info.basic.is_some() {
+            data.basic = info.basic;
         }
-        if data.hdr.is_some() && data.hdr.as_ref().unwrap().color_coords.is_some() {
+        if info.hdr.is_some() {
+            data.hdr = info.hdr;
+        }
+
+        if has_hdr_with_coords(&data) {
             return Ok(data);
         }
 
@@ -165,49 +167,46 @@ impl Metadata {
                 data.hdr = Some(info);
             }
             Ok(None) => (),
-            Err(e) => {
-                eprintln!("Warning: {}", e);
-            }
+            Err(_) => (),
         }
 
         Ok(data)
     }
 
     pub fn apply(&self, target: &Path, chapters: Option<&Path>) -> Result<()> {
+        ensure_tools_in_path(&["mkvpropedit"])?;
         let mut command = self.build_mkvmerge_command(target, chapters);
-        eprintln!("Running: {:?}", command);
-        let status = command.status()?;
-        if !status.success() {
-            anyhow::bail!("Failed to mux metadata");
-        }
+        run_command_output(&mut command, "mkvpropedit")?;
         Ok(())
     }
 
-    pub fn print(&self, format: Option<&str>) {
+    pub fn print(&self, format: Option<&str>) -> Result<()> {
         match format {
             None => self.print_human_readable_format(),
             Some("x265") => self.print_x265_args(),
             Some("svt-av1") => self.print_svtav1_args(),
             Some("rav1e") => self.print_rav1e_args(),
             Some("mkvmerge") => self.print_mkvmerge_args(),
-            _ => unreachable!("Unimplemented output format"),
+            Some(other) => Err(Error::UnsupportedFormat {
+                format: other.to_string(),
+            }),
         }
     }
 
-    fn print_human_readable_format(&self) {
+    fn print_human_readable_format(&self) -> Result<()> {
         if let Some(ref basic) = self.basic {
-            println!("Color Range: {}", print_color_range(basic.range));
+            println!("Color Range: {}", print_color_range(basic.range)?);
             println!(
                 "Color Primaries: {}",
-                print_color_primaries(basic.primaries)
+                print_color_primaries(basic.primaries)?
             );
             println!(
                 "Transfer Characteristics: {}",
-                print_transfer_characteristics(basic.transfer)
+                print_transfer_characteristics(basic.transfer)?
             );
             println!(
                 "Matrix Coefficients: {}",
-                print_matrix_coefficients(basic.matrix)
+                print_matrix_coefficients(basic.matrix)?
             );
             println!("Chroma Position: {}", basic.chroma_location);
         }
@@ -238,24 +237,31 @@ impl Metadata {
                 );
             }
         }
+
+        Ok(())
     }
 
-    fn print_x265_args(&self) {
+    fn print_x265_args(&self) -> Result<()> {
         println!(
             "{}{}",
             if let Some(ref basic) = self.basic {
                 format!(
                     "--range {} --colorprim {} --transfer {} --colormatrix {} --chromaloc {}",
-                    print_x265_color_range(basic.range),
-                    print_x265_color_primaries(basic.primaries),
-                    print_x265_transfer_characteristics(basic.transfer),
-                    print_x265_matrix_coefficients(basic.matrix),
+                    print_x265_color_range(basic.range)?,
+                    print_x265_color_primaries(basic.primaries)?,
+                    print_x265_transfer_characteristics(basic.transfer)?,
+                    print_x265_matrix_coefficients(basic.matrix)?,
                     print_x265_chroma_location(basic.chroma_location),
                 )
             } else {
                 String::new()
             },
             if let Some(ref hdr_data) = self.hdr {
+                let color_coords = hdr_data
+                    .color_coords
+                    .as_ref()
+                    .ok_or(Error::MissingHdrColorCoordinates { format: "x265" })?;
+
                 format!(
                     " {}{} --max-cll {},{} --master-display {}",
                     if hdr_data.max_luma > 0 {
@@ -270,48 +276,51 @@ impl Metadata {
                     },
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
-                    format_master_display(
-                        hdr_data.color_coords.as_ref().unwrap(),
-                        hdr_data.max_luma,
-                        hdr_data.min_luma
-                    )
+                    format_master_display(color_coords, hdr_data.max_luma, hdr_data.min_luma)
                 )
             } else {
                 String::new()
             }
         );
+
+        Ok(())
     }
 
-    fn print_svtav1_args(&self) {
+    fn print_svtav1_args(&self) -> Result<()> {
         println!(
             "{}{}",
             if let Some(ref basic) = self.basic {
                 format!(
                     "--color-range {} --color-primaries {} --transfer-characteristics {} \
                      --matrix-coefficients {} --chroma-sample-position {}",
-                    print_svtav1_color_range(basic.range),
-                    print_svtav1_color_primaries(basic.primaries),
-                    print_svtav1_transfer_characteristics(basic.transfer),
-                    print_svtav1_matrix_coefficients(basic.matrix),
+                    print_svtav1_color_range(basic.range)?,
+                    print_svtav1_color_primaries(basic.primaries)?,
+                    print_svtav1_transfer_characteristics(basic.transfer)?,
+                    print_svtav1_matrix_coefficients(basic.matrix)?,
                     print_svtav1_chroma_location(basic.chroma_location),
                 )
             } else {
                 String::new()
             },
             if let Some(ref hdr_data) = self.hdr {
+                let color_coords = hdr_data
+                    .color_coords
+                    .as_ref()
+                    .ok_or(Error::MissingHdrColorCoordinates { format: "svt-av1" })?;
+
                 format!(
                     " --content-light {},{} --mastering-display \
                      G({},{})B({},{})R({},{})WP({},{})L({},{})",
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
-                    hdr_data.color_coords.as_ref().unwrap().green.0,
-                    hdr_data.color_coords.as_ref().unwrap().green.1,
-                    hdr_data.color_coords.as_ref().unwrap().blue.0,
-                    hdr_data.color_coords.as_ref().unwrap().blue.1,
-                    hdr_data.color_coords.as_ref().unwrap().red.0,
-                    hdr_data.color_coords.as_ref().unwrap().red.1,
-                    hdr_data.color_coords.as_ref().unwrap().white.0,
-                    hdr_data.color_coords.as_ref().unwrap().white.1,
+                    color_coords.green.0,
+                    color_coords.green.1,
+                    color_coords.blue.0,
+                    color_coords.blue.1,
+                    color_coords.red.0,
+                    color_coords.red.1,
+                    color_coords.white.0,
+                    color_coords.white.1,
                     hdr_data.max_luma,
                     hdr_data.min_luma,
                 )
@@ -319,52 +328,59 @@ impl Metadata {
                 String::new()
             }
         );
+
+        Ok(())
     }
 
-    fn print_rav1e_args(&self) {
+    fn print_rav1e_args(&self) -> Result<()> {
         println!(
             "{}{}",
             if let Some(ref basic) = self.basic {
                 // rav1e does not support a chroma location parameter
                 format!(
                     "--range {} --primaries {} --transfer {} --matrix {}",
-                    print_rav1e_color_range(basic.range),
-                    print_rav1e_color_primaries(basic.primaries),
-                    print_rav1e_transfer_characteristics(basic.transfer),
-                    print_rav1e_matrix_coefficients(basic.matrix)
+                    print_rav1e_color_range(basic.range)?,
+                    print_rav1e_color_primaries(basic.primaries)?,
+                    print_rav1e_transfer_characteristics(basic.transfer)?,
+                    print_rav1e_matrix_coefficients(basic.matrix)?
                 )
             } else {
                 String::new()
             },
             if let Some(ref hdr_data) = self.hdr {
+                let color_coords = hdr_data
+                    .color_coords
+                    .as_ref()
+                    .ok_or(Error::MissingHdrColorCoordinates { format: "rav1e" })?;
+
                 format!(
                     " --content-light {},{} --mastering-display {}",
                     hdr_data.max_content_light,
                     hdr_data.max_frame_light,
-                    format_master_display(
-                        hdr_data.color_coords.as_ref().unwrap(),
-                        hdr_data.max_luma,
-                        hdr_data.min_luma
-                    )
+                    format_master_display(color_coords, hdr_data.max_luma, hdr_data.min_luma)
                 )
             } else {
                 String::new()
             }
         );
+
+        Ok(())
     }
 
     // This is a bit different and weird compared to the other print functions.
     // The reason is to reduce code duplication, since we also use mkvmerge
     // for muxing.
-    fn print_mkvmerge_args(&self) {
+    fn print_mkvmerge_args(&self) -> Result<()> {
         let output = format!("{:?}", self.build_mkvmerge_command(Path::new("NUL"), None));
         println!(
             "{}",
             output
                 .replace('"', "")
-                .trim_start_matches("mkvmerge -o NUL ")
+                .trim_start_matches("mkvpropedit ")
                 .trim_end_matches(" NUL")
         );
+
+        Ok(())
     }
 
     fn build_mkvmerge_command(&self, target: &Path, chapters: Option<&Path>) -> Command {
@@ -465,6 +481,14 @@ impl Metadata {
     }
 }
 
+fn has_hdr_with_coords(metadata: &Metadata) -> bool {
+    metadata
+        .hdr
+        .as_ref()
+        .and_then(|hdr| hdr.color_coords.as_ref())
+        .is_some()
+}
+
 fn format_master_display(coords: &ColorCoordinates, max_luma: u32, min_luma: f64) -> String {
     format!(
         "G({},{})B({},{})R({},{})WP({},{})L({},{})",
@@ -481,16 +505,40 @@ fn format_master_display(coords: &ColorCoordinates, max_luma: u32, min_luma: f64
     )
 }
 
-pub fn extract_chapters(input: &Path) -> Option<PathBuf> {
+pub fn extract_chapters(input: &Path) -> Result<Option<PathBuf>> {
+    ensure_tools_in_path(&["mkvextract"])?;
+
     let output = input.with_extension("hdrcp_chapters.xml");
-    let result = Command::new("mkvextract")
-        .arg(input)
-        .arg("chapters")
-        .arg(&output)
-        .status();
-    if result.is_ok() && output.exists() && output.metadata().expect("File exists").len() > 0 {
-        Some(output)
+    if output.exists() {
+        fs::remove_file(&output).map_err(|source| Error::Io {
+            path: output.clone(),
+            source,
+        })?;
+    }
+
+    let mut command = Command::new("mkvextract");
+    command.arg(input).arg("chapters").arg(&output);
+    run_command_output(&mut command, "mkvextract")?;
+
+    if !output.exists() {
+        return Err(Error::UnexpectedOutput {
+            tool: "mkvextract",
+            line: format!("Expected chapter output file was not created: {:?}", output),
+        });
+    }
+
+    let chapter_metadata = output.metadata().map_err(|source| Error::Io {
+        path: output.clone(),
+        source,
+    })?;
+
+    if chapter_metadata.len() > 0 {
+        Ok(Some(output))
     } else {
-        None
+        fs::remove_file(&output).map_err(|source| Error::Io {
+            path: output.clone(),
+            source,
+        })?;
+        Ok(None)
     }
 }

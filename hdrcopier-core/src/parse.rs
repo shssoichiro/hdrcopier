@@ -1,20 +1,16 @@
 use std::{path::Path, process::Command};
 
-use anyhow::{bail, Result};
-use nom::{
-    bytes::complete::tag,
-    character::complete::{char, digit1},
-    combinator::map,
-    sequence::{delimited, preceded, separated_pair},
-    IResult,
-};
-
 use crate::{
     metadata::{BasicMetadata, ChromaLocation, ColorCoordinates, HdrMetadata, Metadata},
+    tools::run_command_output,
     values::{
-        parse_color_primaries, parse_color_range, parse_matrix_coefficients,
+        parse_color_primaries,
+        parse_color_range,
+        parse_matrix_coefficients,
         parse_transfer_characteristics,
     },
+    Error,
+    Result,
 };
 
 // MKVInfo may include data that looks like this:
@@ -41,7 +37,9 @@ use crate::{
 //
 // This is the case if the metadata was muxed into the MKV headers.
 pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
-    let result = Command::new("mkvinfo").arg(input).output()?;
+    let mut command = Command::new("mkvinfo");
+    command.arg(input);
+    let result = run_command_output(&mut command, "mkvinfo")?;
     let output = String::from_utf8_lossy(&result.stdout);
 
     let mut basic = BasicMetadata::default();
@@ -49,34 +47,41 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
     let mut hdr = HdrMetadata::default();
     let mut has_hdr = false;
     let mut chroma_location = (0, 0);
+
     for line in output.lines() {
         if line.contains("Colour matrix coefficients:") {
-            basic.matrix = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            basic.matrix = parse_int("mkvinfo", "matrix coefficients", value)?;
             has_basic = true;
             continue;
         }
         if line.contains("Colour range:") {
-            basic.range = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            basic.range = parse_int("mkvinfo", "color range", value)?;
             has_basic = true;
             continue;
         }
         if line.contains("Colour transfer:") {
-            basic.transfer = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            basic.transfer = parse_int("mkvinfo", "transfer characteristics", value)?;
             has_basic = true;
             continue;
         }
         if line.contains("Colour primaries:") {
-            basic.primaries = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            basic.primaries = parse_int("mkvinfo", "color primaries", value)?;
             has_basic = true;
             continue;
         }
         if line.contains("Horizontal chroma siting:") {
-            chroma_location.0 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            chroma_location.0 = parse_int("mkvinfo", "horizontal chroma siting", value)?;
             has_basic = true;
             continue;
         }
         if line.contains("Vertical chroma siting:") {
-            chroma_location.1 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            chroma_location.1 = parse_int("mkvinfo", "vertical chroma siting", value)?;
             has_basic = true;
             continue;
         }
@@ -87,60 +92,65 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
             continue;
         }
         if line.contains("Maximum content light:") {
-            hdr.max_content_light = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            hdr.max_content_light = parse_int("mkvinfo", "maximum content light", value)?;
             continue;
         }
         if line.contains("Maximum frame light:") {
-            hdr.max_frame_light = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            hdr.max_frame_light = parse_int("mkvinfo", "maximum frame light", value)?;
             continue;
         }
 
         if line.contains("Red colour coordinate x:") {
-            // This should always be the first piece of color data, so we initialize here
-            hdr.color_coords = Some(ColorCoordinates::default());
-
-            hdr.color_coords.as_mut().unwrap().red.0 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).red.0 = parse_float("mkvinfo", "red x", value)?;
             continue;
         }
         if line.contains("Red colour coordinate y:") {
-            hdr.color_coords.as_mut().unwrap().red.1 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).red.1 = parse_float("mkvinfo", "red y", value)?;
             continue;
         }
         if line.contains("Green colour coordinate x:") {
-            hdr.color_coords.as_mut().unwrap().green.0 =
-                line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).green.0 = parse_float("mkvinfo", "green x", value)?;
             continue;
         }
         if line.contains("Green colour coordinate y:") {
-            hdr.color_coords.as_mut().unwrap().green.1 =
-                line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).green.1 = parse_float("mkvinfo", "green y", value)?;
             continue;
         }
         if line.contains("Blue colour coordinate x:") {
-            hdr.color_coords.as_mut().unwrap().blue.0 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).blue.0 = parse_float("mkvinfo", "blue x", value)?;
             continue;
         }
         if line.contains("Blue colour coordinate y:") {
-            hdr.color_coords.as_mut().unwrap().blue.1 = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).blue.1 = parse_float("mkvinfo", "blue y", value)?;
             continue;
         }
         if line.contains("White colour coordinate x:") {
-            hdr.color_coords.as_mut().unwrap().white.0 =
-                line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).white.0 = parse_float("mkvinfo", "white x", value)?;
             continue;
         }
         if line.contains("White colour coordinate y:") {
-            hdr.color_coords.as_mut().unwrap().white.1 =
-                line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            color_coords_mut(&mut hdr).white.1 = parse_float("mkvinfo", "white y", value)?;
             continue;
         }
 
         if line.contains("Maximum luminance:") {
-            hdr.max_luma = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            hdr.max_luma = parse_int("mkvinfo", "maximum luminance", value)?;
             continue;
         }
         if line.contains("Minimum luminance:") {
-            hdr.min_luma = line.split_once(": ").unwrap().1.parse()?;
+            let value = value_after_separator("mkvinfo", line, ": ")?;
+            hdr.min_luma = parse_float("mkvinfo", "minimum luminance", value)?;
             continue;
         }
     }
@@ -154,23 +164,43 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
                     0 => ChromaLocation::Center,
                     // Limited
                     1 => ChromaLocation::Left,
-                    _ => bail!("Unrecognized color range"),
+                    _ => {
+                        return Err(Error::UnsupportedValue {
+                            kind: "color range",
+                            value: basic.range.to_string(),
+                        });
+                    }
                 }
             }
             (0, 1) => match basic.range {
                 0 => ChromaLocation::Top,
                 1 => ChromaLocation::TopLeft,
-                _ => bail!("Unrecognized color range"),
+                _ => {
+                    return Err(Error::UnsupportedValue {
+                        kind: "color range",
+                        value: basic.range.to_string(),
+                    });
+                }
             },
             (0, 2) => match basic.range {
                 0 => ChromaLocation::Center,
                 1 => ChromaLocation::Left,
-                _ => bail!("Unrecognized color range"),
+                _ => {
+                    return Err(Error::UnsupportedValue {
+                        kind: "color range",
+                        value: basic.range.to_string(),
+                    });
+                }
             },
             (0, 3) => match basic.range {
                 0 => ChromaLocation::Bottom,
                 1 => ChromaLocation::BottomLeft,
-                _ => bail!("Unrecognized color range"),
+                _ => {
+                    return Err(Error::UnsupportedValue {
+                        kind: "color range",
+                        value: basic.range.to_string(),
+                    });
+                }
             },
             (1, 0) => ChromaLocation::Left,
             (1, 1) => ChromaLocation::TopLeft,
@@ -180,7 +210,12 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
             (2, 1) => ChromaLocation::Top,
             (2, 2) => ChromaLocation::Center,
             (2, 3) => ChromaLocation::Bottom,
-            (x, y) => bail!("Unrecognized chroma location values: {x}, {y}"),
+            (x, y) => {
+                return Err(Error::UnexpectedOutput {
+                    tool: "mkvinfo",
+                    line: format!("Unrecognized chroma location values: {x}, {y}"),
+                });
+            }
         }
     }
 
@@ -209,31 +244,37 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
 // Note that MediaInfo does not print the chroma location, so we should
 // always prefer mkvinfo's basic output if we have it.
 pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
-    let result = Command::new("mediainfo").arg(input).output()?;
+    let mut command = Command::new("mediainfo");
+    command.arg(input);
+    let result = run_command_output(&mut command, "mediainfo")?;
     let output = String::from_utf8_lossy(&result.stdout);
 
     let mut basic = BasicMetadata::default();
     let mut has_basic = false;
     let mut hdr = HdrMetadata::default();
     let mut has_hdr = false;
+
     for line in output.lines() {
         if line.contains("Matrix coefficients") {
-            basic.matrix = parse_matrix_coefficients(line.split_once(": ").unwrap().1);
+            basic.matrix =
+                parse_matrix_coefficients(value_after_separator("mediainfo", line, ": ")?)?;
             has_basic = true;
             continue;
         }
         if line.contains("Color range") {
-            basic.range = parse_color_range(line.split_once(": ").unwrap().1);
+            basic.range = parse_color_range(value_after_separator("mediainfo", line, ": ")?)?;
             has_basic = true;
             continue;
         }
         if line.contains("Transfer characteristics") {
-            basic.transfer = parse_transfer_characteristics(line.split_once(": ").unwrap().1);
+            basic.transfer =
+                parse_transfer_characteristics(value_after_separator("mediainfo", line, ": ")?)?;
             has_basic = true;
             continue;
         }
         if line.contains("Color primaries") {
-            basic.primaries = parse_color_primaries(line.split_once(": ").unwrap().1);
+            basic.primaries =
+                parse_color_primaries(value_after_separator("mediainfo", line, ": ")?)?;
             has_basic = true;
             continue;
         }
@@ -244,41 +285,43 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
             continue;
         }
         if line.contains("Maximum Content Light Level") {
-            hdr.max_content_light = line
-                .split_once(": ")
-                .unwrap()
-                .1
+            let value = value_after_separator("mediainfo", line, ": ")?
                 .trim_end_matches(" cd/m2")
-                .replace(' ', "")
-                .parse()?;
+                .replace(' ', "");
+            hdr.max_content_light = parse_int("mediainfo", "maximum content light level", &value)?;
             continue;
         }
         if line.contains("Maximum Frame-Average Light Level") {
-            hdr.max_frame_light = line
-                .split_once(": ")
-                .unwrap()
-                .1
+            let value = value_after_separator("mediainfo", line, ": ")?
                 .trim_end_matches(" cd/m2")
-                .replace(' ', "")
-                .parse()?;
+                .replace(' ', "");
+            hdr.max_frame_light =
+                parse_int("mediainfo", "maximum frame-average light level", &value)?;
             continue;
         }
         if line.contains("Mastering display luminance") {
-            let output = line.split_once(": ").unwrap().1;
-            let (min, max) = output.split_once(", ").unwrap();
-            hdr.min_luma = min
-                .trim_start_matches("min: ")
-                .trim_end_matches(" cd/m2")
-                .parse()?;
-            hdr.max_luma = max
-                .trim_start_matches("max: ")
-                .trim_end_matches(" cd/m2")
-                .parse()?;
+            let output = value_after_separator("mediainfo", line, ": ")?;
+            let (min, max) = output
+                .split_once(", ")
+                .ok_or_else(|| Error::UnexpectedOutput {
+                    tool: "mediainfo",
+                    line: line.to_string(),
+                })?;
+            hdr.min_luma = parse_float(
+                "mediainfo",
+                "minimum luminance",
+                min.trim_start_matches("min: ").trim_end_matches(" cd/m2"),
+            )?;
+            hdr.max_luma = parse_int(
+                "mediainfo",
+                "maximum luminance",
+                max.trim_start_matches("max: ").trim_end_matches(" cd/m2"),
+            )?;
             continue;
         }
 
         if line.contains("Encoding settings") && line.contains("master-display") {
-            let settings = line.split_once(": ").unwrap().1;
+            let settings = value_after_separator("mediainfo", line, ": ")?;
             hdr.color_coords = Some(parse_x265_settings(settings)?);
         }
     }
@@ -291,18 +334,21 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
 
 // Takes in a string that contains a substring in the format:
 // master-display=G(13250,34499)B(7499,2999)R(34000,15999)WP(15634,16450)L(10000000,50)cll=944,143
-//
-// Also using unwrap here because I don't want to fight the borrow checker anymore.
 fn parse_x265_settings(input: &str) -> Result<ColorCoordinates> {
     const MASTER_DISPLAY_HEADER: &str = "master-display=";
+
     let header_pos = input
         .find(MASTER_DISPLAY_HEADER)
-        .ok_or_else(|| anyhow::anyhow!("Failed to find master display header"))?;
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool: "mediainfo",
+            line: input.to_string(),
+        })?;
+
     let input = &input[(header_pos + MASTER_DISPLAY_HEADER.len())..];
-    let (input, (gx, gy)) = preceded(char('G'), get_coordinate_pair)(input).unwrap();
-    let (input, (bx, by)) = preceded(char('B'), get_coordinate_pair)(input).unwrap();
-    let (input, (rx, ry)) = preceded(char('R'), get_coordinate_pair)(input).unwrap();
-    let (_, (wx, wy)) = preceded(tag("WP"), get_coordinate_pair)(input).unwrap();
+    let (input, (gx, gy)) = parse_coordinate_pair("mediainfo", input, "G", "green")?;
+    let (input, (bx, by)) = parse_coordinate_pair("mediainfo", input, "B", "blue")?;
+    let (input, (rx, ry)) = parse_coordinate_pair("mediainfo", input, "R", "red")?;
+    let (_, (wx, wy)) = parse_coordinate_pair("mediainfo", input, "WP", "white point")?;
 
     // Why 50000? Why indeed.
     Ok(ColorCoordinates {
@@ -313,15 +359,42 @@ fn parse_x265_settings(input: &str) -> Result<ColorCoordinates> {
     })
 }
 
-fn get_coordinate_pair(input: &str) -> IResult<&str, (u32, u32)> {
-    map(
-        delimited(
-            char('('),
-            separated_pair(digit1, char(','), digit1),
-            char(')'),
-        ),
-        |(x, y): (&str, &str)| (x.parse::<u32>().unwrap(), y.parse::<u32>().unwrap()),
-    )(input)
+fn parse_coordinate_pair<'a>(
+    tool: &'static str,
+    input: &'a str,
+    prefix: &str,
+    field: &str,
+) -> Result<(&'a str, (u32, u32))> {
+    let input = input
+        .strip_prefix(prefix)
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool,
+            line: format!("Missing `{prefix}` prefix in `{input}`"),
+        })?;
+    let input = input
+        .strip_prefix('(')
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool,
+            line: format!("Missing `(` after `{prefix}` in `{input}`"),
+        })?;
+
+    let (coordinates, rest) = input
+        .split_once(')')
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool,
+            line: format!("Missing closing `)` for `{prefix}` in `{input}`"),
+        })?;
+    let (x, y) = coordinates
+        .split_once(',')
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool,
+            line: format!("Missing coordinate separator for `{prefix}` in `{coordinates}`"),
+        })?;
+
+    let x = parse_int(tool, format!("{field} x"), x)?;
+    let y = parse_int(tool, format!("{field} y"), y)?;
+
+    Ok((rest, (x, y)))
 }
 
 // And then there are some videos where the data only shows in ffprobe.
@@ -351,7 +424,8 @@ fn get_coordinate_pair(input: &str) -> IResult<&str, (u32, u32)> {
 // or mkvinfo should have found the color primary data.
 // Or your source is badly broken.
 pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
-    let result = Command::new("ffprobe")
+    let mut command = Command::new("ffprobe");
+    command
         .arg("-v")
         .arg("quiet")
         .arg("-select_streams")
@@ -359,8 +433,8 @@ pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
         .arg("-show_frames")
         .arg("-read_intervals")
         .arg("%+#1")
-        .arg(input)
-        .output()?;
+        .arg(input);
+    let result = run_command_output(&mut command, "ffprobe")?;
     let output = String::from_utf8_lossy(&result.stdout);
 
     if !(output.contains("side_data_type=Mastering display metadata")
@@ -372,75 +446,153 @@ pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
     let mut hdr = HdrMetadata::default();
     for line in output.lines() {
         if line.starts_with("red_x=") {
-            // This should always be the first piece of color data, so we initialize here
-            hdr.color_coords = Some(ColorCoordinates::default());
-
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().red.0 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).red.0 = parse_fraction_f64("ffprobe", "red_x", value)?;
             continue;
         }
         if line.starts_with("red_y=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().red.1 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).red.1 = parse_fraction_f64("ffprobe", "red_y", value)?;
             continue;
         }
         if line.starts_with("green_x=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().green.0 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).green.0 = parse_fraction_f64("ffprobe", "green_x", value)?;
             continue;
         }
         if line.starts_with("green_y=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().green.1 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).green.1 = parse_fraction_f64("ffprobe", "green_y", value)?;
             continue;
         }
         if line.starts_with("blue_x=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().blue.0 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).blue.0 = parse_fraction_f64("ffprobe", "blue_x", value)?;
             continue;
         }
         if line.starts_with("blue_y=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().blue.1 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).blue.1 = parse_fraction_f64("ffprobe", "blue_y", value)?;
             continue;
         }
         if line.starts_with("white_point_x=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().white.0 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).white.0 =
+                parse_fraction_f64("ffprobe", "white_point_x", value)?;
             continue;
         }
         if line.starts_with("white_point_y=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.color_coords.as_mut().unwrap().white.1 =
-                num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            color_coords_mut(&mut hdr).white.1 =
+                parse_fraction_f64("ffprobe", "white_point_y", value)?;
             continue;
         }
         if line.starts_with("min_luminance=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.min_luma = num.parse::<f64>()? / denom.parse::<f64>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            hdr.min_luma = parse_fraction_f64("ffprobe", "min_luminance", value)?;
             continue;
         }
         if line.starts_with("max_luminance=") {
-            let (num, denom) = line.split_once('=').unwrap().1.split_once('/').unwrap();
-            hdr.max_luma = num.parse::<u32>()? / denom.parse::<u32>()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            hdr.max_luma = parse_fraction_u32("ffprobe", "max_luminance", value)?;
             continue;
         }
 
         if line.starts_with("max_content=") {
-            hdr.max_content_light = line.split_once('=').unwrap().1.parse()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            hdr.max_content_light = parse_int("ffprobe", "max_content", value)?;
             continue;
         }
         if line.starts_with("max_average=") {
-            hdr.max_frame_light = line.split_once('=').unwrap().1.parse()?;
+            let value = value_after_separator("ffprobe", line, "=")?;
+            hdr.max_frame_light = parse_int("ffprobe", "max_average", value)?;
             continue;
         }
     }
     Ok(Some(hdr))
+}
+
+fn color_coords_mut(hdr: &mut HdrMetadata) -> &mut ColorCoordinates {
+    hdr.color_coords
+        .get_or_insert_with(ColorCoordinates::default)
+}
+
+fn value_after_separator<'a>(
+    tool: &'static str,
+    line: &'a str,
+    separator: &str,
+) -> Result<&'a str> {
+    line.split_once(separator)
+        .map(|(_, value)| value)
+        .ok_or_else(|| Error::UnexpectedOutput {
+            tool,
+            line: line.to_string(),
+        })
+}
+
+fn parse_int<T>(tool: &'static str, field: impl Into<String>, value: &str) -> Result<T>
+where
+    T: std::str::FromStr<Err = std::num::ParseIntError>,
+{
+    let field = field.into();
+    value.parse::<T>().map_err(|source| Error::ParseInt {
+        tool,
+        field,
+        value: value.to_string(),
+        source,
+    })
+}
+
+fn parse_float(tool: &'static str, field: impl Into<String>, value: &str) -> Result<f64> {
+    let field = field.into();
+    value.parse::<f64>().map_err(|source| Error::ParseFloat {
+        tool,
+        field,
+        value: value.to_string(),
+        source,
+    })
+}
+
+fn parse_fraction_f64(tool: &'static str, field: impl Into<String>, value: &str) -> Result<f64> {
+    let field = field.into();
+    let (numerator, denominator) =
+        value
+            .split_once('/')
+            .ok_or_else(|| Error::UnexpectedOutput {
+                tool,
+                line: value.to_string(),
+            })?;
+
+    let numerator = parse_float(tool, field.clone(), numerator)?;
+    let denominator = parse_float(tool, field.clone(), denominator)?;
+    if denominator == 0.0 {
+        return Err(Error::UnexpectedOutput {
+            tool,
+            line: format!("{field} has a zero denominator: {value}"),
+        });
+    }
+
+    Ok(numerator / denominator)
+}
+
+fn parse_fraction_u32(tool: &'static str, field: impl Into<String>, value: &str) -> Result<u32> {
+    let field = field.into();
+    let (numerator, denominator) =
+        value
+            .split_once('/')
+            .ok_or_else(|| Error::UnexpectedOutput {
+                tool,
+                line: value.to_string(),
+            })?;
+
+    let numerator = parse_int::<u32>(tool, field.clone(), numerator)?;
+    let denominator = parse_int::<u32>(tool, field.clone(), denominator)?;
+    if denominator == 0 {
+        return Err(Error::UnexpectedOutput {
+            tool,
+            line: format!("{field} has a zero denominator: {value}"),
+        });
+    }
+
+    Ok(numerator / denominator)
 }

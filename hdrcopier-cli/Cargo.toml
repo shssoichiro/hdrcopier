@@ -2,7 +2,7 @@
 name = "hdrcopier-cli"
 version = "0.4.3"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.85"
 authors = ["Joshua Holmer <jholmer.in@gmail.com>"]
 description = "A tool for copying colorspace and HDR metadata from one file to another"
 repository = "https://github.com/shssoichiro/hdrcopier"
@@ -16,5 +16,6 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hdrcopier-core = { version = "0.4.3", path = "../hdrcopier-core" }
+anyhow = "1.0.100"
 clap = "4.4.8"
+hdrcopier-core = { version = "0.4.3", path = "../hdrcopier-core" }

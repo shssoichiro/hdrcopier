@@ -1,55 +1,41 @@
 #![warn(clippy::all)]
 
+mod error;
 mod metadata;
 mod parse;
+mod tools;
 mod values;
 
-use std::{path::PathBuf, process::exit};
+use std::path::PathBuf;
 
+pub use crate::error::{Error, Result};
 use crate::metadata::{extract_chapters, Metadata};
 
-pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) {
+pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) -> Result<()> {
     if !input.is_file() {
-        eprintln!("Input file {:?} does not exist", input);
-        exit(1);
-    }
-    if !target.is_file() {
-        eprintln!("Target file {:?} does not exist", target);
-        exit(1);
+        return Err(Error::InputNotAFile { path: input });
     }
 
-    let metadata = match Metadata::parse(&input) {
-        Ok(metadata) => metadata,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
+    if !target.is_file() {
+        return Err(Error::TargetNotAFile { path: target });
+    }
+
+    let metadata = Metadata::parse(&input)?;
     let chapters = if chapters {
-        extract_chapters(&input)
+        extract_chapters(&input)?
     } else {
         None
     };
-    if let Err(e) = metadata.apply(&target, chapters.as_deref()) {
-        eprintln!("{}", e);
-        exit(1);
-    };
+    metadata.apply(&target, chapters.as_deref())?;
 
-    eprintln!("Done!");
+    Ok(())
 }
 
-pub fn show(input: PathBuf, formatting: Option<&str>) {
+pub fn show(input: PathBuf, formatting: Option<&str>) -> Result<()> {
     if !input.is_file() {
-        eprintln!("Input file {:?} does not exist", input);
-        exit(1);
+        return Err(Error::InputNotAFile { path: input });
     }
 
-    let metadata = match Metadata::parse(&input) {
-        Ok(metadata) => metadata,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
-    metadata.print(formatting);
+    let metadata = Metadata::parse(&input)?;
+    metadata.print(formatting)
 }
