@@ -1,3 +1,7 @@
+## Version 0.5.2
+
+- Support BT.601 primaries for newer mediainfo versions
+
 ## Version 0.5.1
 
 - Do not error on chapter extraction if source has no chapters

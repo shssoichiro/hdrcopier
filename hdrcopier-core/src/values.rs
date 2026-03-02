@@ -296,7 +296,7 @@ pub fn parse_color_primaries(value: &str) -> Result<u8> {
         "unspecified" | "unset" => Ok(2),
         "bt.470 m" => Ok(4),
         "bt.470 bg" => Ok(5),
-        "smpte 170m" | "bt.601" => Ok(6),
+        "smpte 170m" | "bt.601" | "bt.601 ntsc" => Ok(6),
         "smpte 240m" => Ok(7),
         "film" | "ntsc" => Ok(8),
         "bt.2020" => Ok(9),
