@@ -6,11 +6,15 @@ mod parse;
 mod tools;
 mod values;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, process::Command};
 
 pub use crate::error::{Error, Result};
-use crate::metadata::{Metadata, extract_chapters};
+use crate::{
+    metadata::{Metadata, extract_chapters},
+    tools::{ensure_tools_in_path, run_command_output},
+};
 
+/// Copy metadata and optionally chapters
 pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) -> Result<()> {
     if !input.is_file() {
         return Err(Error::InputNotAFile { path: input });
@@ -31,6 +35,22 @@ pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) -> Result<()> {
     Ok(())
 }
 
+/// Copies only the chapters without copying metadata
+pub fn copy_chapters(input: PathBuf, target: PathBuf) -> Result<()> {
+    let chapters = extract_chapters(&input)?;
+
+    if let Some(chapters) = chapters {
+        ensure_tools_in_path(&["mkvpropedit"])?;
+        let mut command = Command::new("mkvpropedit");
+        command.arg("-c").arg(chapters);
+        command.arg(target);
+        run_command_output(&mut command, "mkvpropedit")?;
+    }
+
+    Ok(())
+}
+
+/// Display the metadata for a file
 pub fn show(input: PathBuf, formatting: Option<&str>) -> Result<()> {
     if !input.is_file() {
         return Err(Error::InputNotAFile { path: input });
