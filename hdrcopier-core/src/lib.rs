@@ -31,6 +31,11 @@ pub fn copy(input: PathBuf, target: PathBuf, chapters: bool) -> Result<()> {
         None
     };
     metadata.apply(&target, chapters.as_deref())?;
+    log::info!(
+        "Copied metadata from {} to {}",
+        input.display(),
+        target.display()
+    );
 
     Ok(())
 }
@@ -43,8 +48,15 @@ pub fn copy_chapters(input: PathBuf, target: PathBuf) -> Result<()> {
         ensure_tools_in_path(&["mkvpropedit"])?;
         let mut command = Command::new("mkvpropedit");
         command.arg("-c").arg(chapters);
-        command.arg(target);
+        command.arg(&target);
         run_command_output(&mut command, "mkvpropedit")?;
+        log::info!(
+            "Copied chapters from {} to {}",
+            input.display(),
+            target.display()
+        );
+    } else {
+        log::info!("No chapters to copy from {}", input.display());
     }
 
     Ok(())
