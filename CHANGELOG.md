@@ -1,6 +1,14 @@
+## Version 0.6.0 (library only)
+
+- [Feature] Add `copy_chapters` library function
+
+## Version 0.5.3
+
+- Support BT.601 PAL primaries for newer mediainfo versions
+
 ## Version 0.5.2
 
-- Support BT.601 primaries for newer mediainfo versions
+- Support BT.601 NTSC primaries for newer mediainfo versions
 
 ## Version 0.5.1
 

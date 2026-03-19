@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "hdrcopier-core"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "log",
  "thiserror",
