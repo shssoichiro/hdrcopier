@@ -62,7 +62,7 @@ pub fn parse_matrix_coefficients(value: &str) -> Result<u8> {
         "bt.709" => Ok(1),
         "unspecified" | "unset" => Ok(2),
         "fcc" => Ok(4),
-        "bt.470 bg" => Ok(5),
+        "bt.470 bg" | "bt.470 system b/g" => Ok(5),
         "smpte 170m" | "bt.601" => Ok(6),
         "smpte 240m" => Ok(7),
         "ycgco" => Ok(8),
