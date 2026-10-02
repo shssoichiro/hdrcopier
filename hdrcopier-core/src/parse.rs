@@ -39,13 +39,23 @@ pub fn parse_mkvinfo(input: &Path) -> Result<Metadata> {
     let result = run_command_output(&mut command, "mkvinfo")?;
     let output = String::from_utf8_lossy(&result.stdout);
 
+    parse_mkvinfo_output(&output)
+}
+
+fn parse_mkvinfo_output(output: &str) -> Result<Metadata> {
     let mut basic = BasicMetadata::default();
     let mut has_basic = false;
     let mut hdr = HdrMetadata::default();
     let mut has_hdr = false;
     let mut chroma_location = (0, 0);
 
-    for line in output.lines() {
+    // Stop at the end of the first video subtree, even if it has no color metadata.
+    let video_lines = output
+        .lines()
+        .skip_while(|line| *line != "|  + Video track")
+        .skip(1)
+        .take_while(|line| line.starts_with("|   "));
+    for line in video_lines {
         if line.contains("Colour matrix coefficients:") {
             let value = value_after_separator("mkvinfo", line, ": ")?;
             basic.matrix = parse_int("mkvinfo", "matrix coefficients", value)?;
@@ -246,12 +256,28 @@ pub fn parse_mediainfo(input: &Path) -> Result<Metadata> {
     let result = run_command_output(&mut command, "mediainfo")?;
     let output = String::from_utf8_lossy(&result.stdout);
 
+    parse_mediainfo_output(&output)
+}
+
+fn parse_mediainfo_output(output: &str) -> Result<Metadata> {
     let mut basic = BasicMetadata::default();
     let mut has_basic = false;
     let mut hdr = HdrMetadata::default();
     let mut has_hdr = false;
 
-    for line in output.lines() {
+    // Attachments and later videos must not supply or override the first video's fields.
+    let video_lines = output
+        .lines()
+        .skip_while(|line| {
+            let line = line.trim();
+            line != "Video"
+                && !line.strip_prefix("Video #").is_some_and(|number| {
+                    !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+                })
+        })
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty());
+    for line in video_lines {
         if line.contains("Matrix coefficients") {
             basic.matrix =
                 parse_matrix_coefficients(value_after_separator("mediainfo", line, ": ")?)?;
@@ -426,7 +452,8 @@ pub fn parse_ffprobe(input: &Path) -> Result<Option<HdrMetadata>> {
         .arg("-v")
         .arg("quiet")
         .arg("-select_streams")
-        .arg("v:0")
+        // Uppercase V excludes attached pictures, thumbnails, and cover art.
+        .arg("V:0")
         .arg("-show_frames")
         .arg("-read_intervals")
         .arg("%+#1")
@@ -592,4 +619,185 @@ fn parse_fraction_u32(tool: &'static str, field: impl Into<String>, value: &str)
     }
 
     Ok(numerator / denominator)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MEDIAINFO_FIELDS: &str = "Color range : Limited
+Color primaries : BT.2020
+Transfer characteristics : PQ
+Matrix coefficients : BT.2020 non-constant
+Mastering display color primaries : Display P3
+Mastering display luminance : min: 0.0010 cd/m2, max: 1000 cd/m2
+Maximum Content Light Level : 349 cd/m2
+Maximum Frame-Average Light Level : 120 cd/m2
+Encoding settings : master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,10)";
+
+    const MKVINFO_FIELDS: &str = "|   + Video colour information
+|    + Colour matrix coefficients: 9
+|    + Colour range: 1
+|    + Colour transfer: 16
+|    + Colour primaries: 9
+|    + Horizontal chroma siting: 1
+|    + Vertical chroma siting: 1
+|    + Maximum content light: 349
+|    + Maximum frame light: 120
+|    + Video colour mastering metadata
+|     + Red colour coordinate x: 0.68
+|     + Red colour coordinate y: 0.32
+|     + Green colour coordinate x: 0.265
+|     + Green colour coordinate y: 0.69
+|     + Blue colour coordinate x: 0.15
+|     + Blue colour coordinate y: 0.06
+|     + White colour coordinate x: 0.3127
+|     + White colour coordinate y: 0.329
+|     + Maximum luminance: 1000
+|     + Minimum luminance: 0.001";
+
+    fn assert_first_video_metadata(metadata: Metadata, chroma: ChromaLocation) {
+        let basic = metadata.basic.expect("first video has basic metadata");
+        assert_eq!(
+            (basic.range, basic.primaries, basic.transfer, basic.matrix),
+            (1, 9, 16, 9)
+        );
+        assert_eq!(basic.chroma_location as u8, chroma as u8);
+        let hdr = metadata.hdr.expect("first video has HDR metadata");
+        assert_eq!(
+            (hdr.max_luma, hdr.max_content_light, hdr.max_frame_light),
+            (1000, 349, 120)
+        );
+        assert!((hdr.min_luma - 0.001).abs() < 1e-10);
+        let coords = hdr
+            .color_coords
+            .expect("first video has mastering coordinates");
+        for (actual, expected) in [
+            (coords.red, (0.68, 0.32)),
+            (coords.green, (0.265, 0.69)),
+            (coords.blue, (0.15, 0.06)),
+            (coords.white, (0.3127, 0.329)),
+        ] {
+            assert!((actual.0 - expected.0).abs() < 1e-10);
+            assert!((actual.1 - expected.1).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn mediainfo_uses_only_first_video() {
+        for heading in ["Video", "Video #1"] {
+            for suffix in [
+                "",
+                "\n\nVideo #2\nDefault : Yes\nColor range : Full\nColor primaries : BT.709\nTransfer characteristics : BT.709\nMatrix coefficients : BT.709\nMastering display luminance : min: 1 cd/m2, max: 4000 cd/m2\nMaximum Content Light Level : 999 cd/m2\nMaximum Frame-Average Light Level : 500 cd/m2\nEncoding settings : master-display=G(1,2)B(3,4)R(5,6)WP(7,8)",
+                "\n \t\nImage\nColor range : Full\nColor primaries : BT.709\nTransfer characteristics : sRGB/sYCC\nMatrix coefficients : Identity",
+                "\n\nAudio\nTransfer characteristics : BT.709\n\nText\nEncoding settings : master-display=invalid",
+            ] {
+                let output = format!(
+                    "General\nTitle : Video #1\n\nImage\nTransfer characteristics : sRGB/sYCC\n\n{heading}\n{MEDIAINFO_FIELDS}{suffix}"
+                );
+                for output in [&output, &output.replace('\n', "\r\n")] {
+                    let metadata =
+                        parse_mediainfo_output(output).expect("ignore all non-primary sections");
+                    assert_first_video_metadata(metadata, ChromaLocation::Left);
+                }
+            }
+        }
+
+        // An ordinary single-video report needs neither a General section nor a trailing separator.
+        assert_first_video_metadata(
+            parse_mediainfo_output(&format!("Video\n{MEDIAINFO_FIELDS}")).expect("single video"),
+            ChromaLocation::Left,
+        );
+        for output in [
+            String::new(),
+            format!("Image\n{MEDIAINFO_FIELDS}"),
+            format!("Video #1 extra\n{MEDIAINFO_FIELDS}"),
+            format!("General\nTitle : Video\n{MEDIAINFO_FIELDS}"),
+            format!("Video #1\nFormat : HEVC\n\nVideo #2\nDefault : Yes\n{MEDIAINFO_FIELDS}"),
+            format!("Video\nFormat : HEVC\n\nImage\n{MEDIAINFO_FIELDS}"),
+        ] {
+            let metadata = parse_mediainfo_output(&output).expect("no selected-video metadata");
+            assert!(metadata.basic.is_none(), "{output}");
+            assert!(metadata.hdr.is_none(), "{output}");
+        }
+        let metadata = parse_mediainfo_output(&format!(
+            "Video\nTransfer characteristics : PQ\n\nImage\n{MEDIAINFO_FIELDS}"
+        ))
+        .expect("image must not supply HDR");
+        assert_eq!(metadata.basic.expect("video transfer").transfer, 16);
+        assert!(metadata.hdr.is_none());
+    }
+
+    #[test]
+    fn mkvinfo_uses_only_first_video() {
+        for suffix in [
+            "",
+            "\n| + Track\n|  + Track type: video\n|  + Video track\n|   + Colour transfer: 1\n|   + Colour primaries: 1\n|   + Colour range: 0\n|   + Horizontal chroma siting: 2\n|   + Maximum content light: 999\n|   + Maximum frame light: 500\n|   + Maximum luminance: 4000\n|   + Minimum luminance: 1\n|   + Red colour coordinate x: 0.1",
+            "\n| + Track\n|  + Track type: audio\n|  + Audio track\n|   + Maximum luminance: invalid",
+            "\n|+ Attachments\n| + Attached\n|  + Maximum luminance: invalid",
+            "\n|+ Tags\n| + Tag\n|  + Colour transfer: invalid",
+        ] {
+            let output = format!(
+                "|+ Tracks\n| + Track\n|  + Track type: audio\n|  + Audio track\n|   + Colour transfer: 1\n| + Track\n|  + Track type: video\n|  + Video track\n{MKVINFO_FIELDS}{suffix}"
+            );
+            let metadata = parse_mkvinfo_output(&output).expect("ignore non-primary subtrees");
+            assert_first_video_metadata(metadata, ChromaLocation::TopLeft);
+        }
+        assert_first_video_metadata(
+            parse_mkvinfo_output(&format!("| + Track\n|  + Video track\n{MKVINFO_FIELDS}"))
+                .expect("single video"),
+            ChromaLocation::TopLeft,
+        );
+        for output in [
+            String::new(),
+            format!("| + Track\n|  + Audio track\n{MKVINFO_FIELDS}"),
+            format!(
+                "| + Track\n|  + Video track\n|   + Pixel width: 1920\n| + Track\n|  + Video track\n{MKVINFO_FIELDS}"
+            ),
+            format!(
+                "| + Track\n|  + Video track\n|   + Pixel width: 1920\n|+ Tags\n{MKVINFO_FIELDS}"
+            ),
+        ] {
+            let metadata = parse_mkvinfo_output(&output).expect("no selected-video metadata");
+            assert!(metadata.basic.is_none(), "{output}");
+            assert!(metadata.hdr.is_none(), "{output}");
+        }
+        let metadata = parse_mkvinfo_output(&format!("| + Track\n|  + Video track\n|   + Colour transfer: 16\n| + Track\n|  + Video track\n{MKVINFO_FIELDS}"))
+            .expect("second video must not supply HDR");
+        assert_eq!(metadata.basic.expect("video transfer").transfer, 16);
+        assert!(metadata.hdr.is_none());
+    }
+
+    #[test]
+    fn selected_video_validation_is_preserved() {
+        let invalid_transfer = "Transfer characteristics : sRGB/sYCC";
+        assert!(matches!(
+            parse_mediainfo_output(&format!("Video\n{invalid_transfer}")),
+            Err(Error::UnsupportedValue { kind: "transfer characteristics", value }) if value == "sRGB/sYCC"
+        ));
+        let ignored = format!(
+            "Image\n{invalid_transfer}\n\nVideo\nTransfer characteristics : PQ\n\nVideo #2\n{invalid_transfer}"
+        );
+        assert_eq!(
+            parse_mediainfo_output(&ignored)
+                .expect("ignore invalid other tracks")
+                .basic
+                .expect("video transfer")
+                .transfer,
+            16
+        );
+
+        let invalid_luma = "|   + Maximum luminance: invalid";
+        assert!(matches!(
+            parse_mkvinfo_output(&format!("| + Track\n|  + Video track\n{invalid_luma}")),
+            Err(Error::ParseInt { tool: "mkvinfo", field, value, .. }) if field == "maximum luminance" && value == "invalid"
+        ));
+        let ignored = format!(
+            "| + Track\n|  + Audio track\n{invalid_luma}\n| + Track\n|  + Video track\n{MKVINFO_FIELDS}\n| + Track\n|  + Video track\n{invalid_luma}"
+        );
+        assert_first_video_metadata(
+            parse_mkvinfo_output(&ignored).expect("ignore invalid other tracks"),
+            ChromaLocation::TopLeft,
+        );
+    }
 }
